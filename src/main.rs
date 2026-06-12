@@ -19,6 +19,7 @@ use crate::tools::cargo_exec::CargoRunTool;
 use crate::tools::directory_list::DirectoryListTool;
 use crate::tools::directory_make::DirectoryMakeTool;
 use crate::tools::file_edit::FileEditTool;
+use crate::tools::file_edit_lines::FileEditLinesTool;
 use crate::tools::file_move::FileMoveTool;
 use crate::tools::file_read::FileReadTool;
 use crate::tools::file_write::FileWriteTool;
@@ -168,6 +169,12 @@ impl CargoRunner {
     #[tool(description = "Edit a file by replacing a unique string")]
     #[instrument(skip_all, "tool/edit_file")]
     pub async fn edit_file(&self, args: Parameters<FileEditTool>) -> Result<String, ErrorData> {
+        args.0.handle(self).await
+    }
+
+    #[tool(description = "Replace a range of lines in a file with new text")]
+    #[instrument(skip_all, "tool/edit_file_lines")]
+    pub async fn edit_file_lines(&self, args: Parameters<FileEditLinesTool>) -> Result<String, ErrorData> {
         args.0.handle(self).await
     }
 
