@@ -1,22 +1,67 @@
-use rmcp::model::ListRootsResult;
-use rmcp::transport::StreamableHttpServerConfig;
-use rmcp::{
-    handler::server::wrapper::Parameters, model::{InitializeRequestParams, InitializeResult}, schemars::{self, JsonSchema}, service::RequestContext, tool,
-    tool_handler,
-    tool_router,
-    transport::streamable_http_server::{session::local::LocalSessionManager, StreamableHttpService},
-    ErrorData,
-    RoleServer, ServerHandler, ServiceError,
-    ServiceExt,
-};
-use serde::Deserialize;
+mod tools;
+
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
+
+use rmcp::handler::server::wrapper::Parameters;
+use rmcp::model::{InitializeRequestParams, InitializeResult};
+use rmcp::schemars::{self, JsonSchema};
+use rmcp::service::RequestContext;
+use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
+use rmcp::transport::streamable_http_server::StreamableHttpService;
+use rmcp::transport::StreamableHttpServerConfig;
+use rmcp::{tool, tool_handler, tool_router, ErrorData, RoleServer, ServerHandler, ServiceExt};
+use serde::Deserialize;
 use tokio::process::Command;
 use tracing::{error, info, instrument};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+
+use crate::tools::read_file::ReadFileTool;
+
+////////////////////////////////////////////////////////////////////////////////
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(tracing_subscriber::fmt::layer().with_span_events(FmtSpan::CLOSE))
+        .init();
+
+    if std::env::args().nth(1).as_deref() == Some("stdio") {
+        serve_stdio().await?;
+    } else {
+        serve_http().await?;
+    }
+    Ok(())
+}
+
+////////////////////////////////////////////////////////////////////////////////
+#[instrument(skip_all, "serve_stdio")]
+async fn serve_stdio() -> anyhow::Result<()> {
+    let service = CargoRunner::default()
+        .serve((tokio::io::stdin(), tokio::io::stdout()))
+        .await?;
+    service.waiting().await?;
+    Ok(())
+}
+
+////////////////////////////////////////////////////////////////////////////////
+#[instrument(skip_all, "serve_http")]
+async fn serve_http() -> anyhow::Result<()> {
+    let service = StreamableHttpService::new(
+        || Ok::<_, std::io::Error>(CargoRunner::default()),
+        Arc::new(LocalSessionManager::default()),
+        StreamableHttpServerConfig::default(),
+    );
+
+    let router = axum::Router::new().nest_service("/mcp", service);
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:9999").await?;
+
+    info!("streamable HTTP server listening");
+    axum::serve(listener, router).await?;
+    Ok(())
+}
 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct CargoRunnerArgs {
@@ -41,32 +86,11 @@ impl CargoRunner {
     ) -> Result<InitializeResult, ErrorData> {
         info!("client: {} v{}", request.client_info.name, request.client_info.version);
 
-        info!("{request:?}");
-
         let Some(request_parts) = context.extensions.get::<http::request::Parts>() else {
             let message = "failed to parse request http parts";
             error!("{message}");
             return Err(ErrorData::invalid_request(message, None));
         };
-
-        info!("{request_parts:?}");
-
-        let peer = context.peer.clone();
-        tokio::spawn(async move {
-            error!("calling list_roots");
-            match peer.list_roots().await {
-                Ok(e) => {
-                    error!("list_roots = {e:#?}");
-                }
-                Err(e) => {
-                    error!("list_roots = {e:?}");
-                }
-            };
-        });
-
-        if "".is_empty() {
-            return Ok(self.get_info());
-        }
 
         let Some(workspace_root) = request_parts.headers.get(Self::HEADER_WORKSPACE_ROOT) else {
             let message = format!("{} header is missing", Self::HEADER_WORKSPACE_ROOT);
@@ -102,7 +126,7 @@ impl CargoRunner {
         };
 
         let Ok(path) = tokio::fs::canonicalize(path.as_ref()).await else {
-            let message = "failed to canonicalize workspace dir";
+            let message = format!("failed to canonicalize workspace dir: {}", path.as_ref().display());
             error!("{message}");
             return Err(ErrorData::invalid_request(message, None));
         };
@@ -181,44 +205,10 @@ impl CargoRunner {
     async fn clippy(&self, parameters: Parameters<CargoRunnerArgs>) -> Result<String, ErrorData> {
         self.run("clippy", &parameters.0).await
     }
-}
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let fmt_layer = tracing_subscriber::fmt::layer()
-        .with_target(true)
-        .with_level(true)
-        .with_span_events(FmtSpan::CLOSE);
-
-    tracing_subscriber::registry().with(fmt_layer).init();
-
-    if std::env::args().nth(1).as_deref() == Some("stdio") {
-        serve_stdio().await?;
-    } else {
-        serve_http().await?;
+    #[tool(description = "Read a file")]
+    #[instrument(skip_all, "tool/read_file")]
+    pub async fn read_file(&self, args: Parameters<ReadFileTool>) -> Result<String, ErrorData> {
+        args.0.handle(self).await
     }
-    Ok(())
-}
-
-#[instrument(skip_all, "serve_stdio")]
-async fn serve_stdio() -> anyhow::Result<()> {
-    let service = CargoRunner::default()
-        .serve((tokio::io::stdin(), tokio::io::stdout()))
-        .await?;
-    service.waiting().await?;
-    Ok(())
-}
-
-#[instrument(skip_all, "serve_http")]
-async fn serve_http() -> anyhow::Result<()> {
-    let service = StreamableHttpService::new(
-        || Ok::<_, std::io::Error>(CargoRunner::default()),
-        Arc::new(LocalSessionManager::default()),
-        StreamableHttpServerConfig::default(),
-    );
-    let router = axum::Router::new().nest_service("/mcp", service);
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:9999").await?;
-    info!("streamable HTTP server listening");
-    axum::serve(listener, router).await?;
-    Ok(())
 }
