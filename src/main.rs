@@ -5,20 +5,23 @@ use std::sync::{Arc, OnceLock};
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{InitializeRequestParams, InitializeResult};
-use rmcp::schemars::{self, JsonSchema};
 use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::StreamableHttpService;
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::{tool, tool_handler, tool_router, ErrorData, RoleServer, ServerHandler, ServiceExt};
-use serde::Deserialize;
-use tokio::process::Command;
 use tracing::{error, info, instrument};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::tools::read_file::ReadFileTool;
+use crate::tools::cargo_exec::CargoRunTool;
+use crate::tools::directory_list::DirectoryListTool;
+use crate::tools::directory_make::DirectoryMakeTool;
+use crate::tools::file_edit::FileEditTool;
+use crate::tools::file_move::FileMoveTool;
+use crate::tools::file_read::FileReadTool;
+use crate::tools::file_write::FileWriteTool;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[tokio::main]
@@ -61,14 +64,6 @@ async fn serve_http() -> anyhow::Result<()> {
     info!("streamable HTTP server listening");
     axum::serve(listener, router).await?;
     Ok(())
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-struct CargoRunnerArgs {
-    /// cargo project root directory
-    project_dir: PathBuf,
-    /// extra arguments added to cargo subcommand
-    arguments: Vec<String>,
 }
 
 #[derive(Default, Clone)]
@@ -138,28 +133,6 @@ impl CargoRunner {
         }
         Ok(path)
     }
-
-    async fn run(&self, subcommand: &str, args: &CargoRunnerArgs) -> Result<String, ErrorData> {
-        info!(subcommand, ?args, "run");
-
-        let project_dir = self.resolve_workspace_dir(&args.project_dir).await?;
-        let output = Command::new("cargo")
-            .arg(subcommand)
-            .args(&args.arguments)
-            .current_dir(project_dir)
-            .output()
-            .await
-            .map_err(|e| {
-                let message = format!("failed to execute cargo: {e}");
-                error!("{message}");
-                ErrorData::internal_error(message, None)
-            })?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-        Ok(format!("STDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"))
-    }
 }
 
 #[tool_handler(router = Self::tool_router())]
@@ -176,39 +149,77 @@ impl ServerHandler for CargoRunner {
 
 #[tool_router]
 impl CargoRunner {
-    #[tool(description = "Runs `cargo fetch` command directly without a terminal shell")]
-    #[instrument(skip_all, "fetch")]
-    async fn fetch(&self, parameters: Parameters<CargoRunnerArgs>) -> Result<String, ErrorData> {
-        self.run("fetch", &parameters.0).await
-    }
-
-    #[tool(description = "Runs `cargo build` command directly without a terminal shell")]
-    #[instrument(skip_all, "build")]
-    async fn build(&self, parameters: Parameters<CargoRunnerArgs>) -> Result<String, ErrorData> {
-        self.run("build", &parameters.0).await
-    }
-
-    #[tool(description = "Runs `cargo test` command directly without a terminal shell")]
-    #[instrument(skip_all, "test")]
-    async fn test(&self, parameters: Parameters<CargoRunnerArgs>) -> Result<String, ErrorData> {
-        self.run("test", &parameters.0).await
-    }
-
-    #[tool(description = "Runs `cargo check` command directly without a terminal shell")]
-    #[instrument(skip_all, "check")]
-    async fn check(&self, parameters: Parameters<CargoRunnerArgs>) -> Result<String, ErrorData> {
-        self.run("check", &parameters.0).await
-    }
-
-    #[tool(description = "Runs `cargo clippy` command directly without a terminal shell")]
-    #[instrument(skip_all, "clippy")]
-    async fn clippy(&self, parameters: Parameters<CargoRunnerArgs>) -> Result<String, ErrorData> {
-        self.run("clippy", &parameters.0).await
-    }
+    ////////////////////////////////////////////////////////////////////////////////
+    // File system
+    ////////////////////////////////////////////////////////////////////////////////
 
     #[tool(description = "Read a file")]
     #[instrument(skip_all, "tool/read_file")]
-    pub async fn read_file(&self, args: Parameters<ReadFileTool>) -> Result<String, ErrorData> {
+    pub async fn read_file(&self, args: Parameters<FileReadTool>) -> Result<String, ErrorData> {
         args.0.handle(self).await
+    }
+
+    #[tool(description = "Write a file, overwriting any existing contents")]
+    #[instrument(skip_all, "tool/write_file")]
+    pub async fn write_file(&self, args: Parameters<FileWriteTool>) -> Result<String, ErrorData> {
+        args.0.handle(self).await
+    }
+
+    #[tool(description = "Edit a file by replacing a unique string")]
+    #[instrument(skip_all, "tool/edit_file")]
+    pub async fn edit_file(&self, args: Parameters<FileEditTool>) -> Result<String, ErrorData> {
+        args.0.handle(self).await
+    }
+
+    #[tool(description = "Move or rename a file or directory")]
+    #[instrument(skip_all, "tool/move_file")]
+    pub async fn move_file(&self, args: Parameters<FileMoveTool>) -> Result<String, ErrorData> {
+        args.0.handle(self).await
+    }
+
+    #[tool(description = "List the entries of a directory")]
+    #[instrument(skip_all, "tool/list_directory")]
+    pub async fn list_directory(&self, args: Parameters<DirectoryListTool>) -> Result<String, ErrorData> {
+        args.0.handle(self).await
+    }
+
+    #[tool(description = "Create a directory, including parents")]
+    #[instrument(skip_all, "tool/make_directory")]
+    pub async fn make_directory(&self, args: Parameters<DirectoryMakeTool>) -> Result<String, ErrorData> {
+        args.0.handle(self).await
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Cargo
+    ////////////////////////////////////////////////////////////////////////////////
+
+    #[tool(description = "Runs `cargo fetch` command directly without a terminal shell")]
+    #[instrument(skip_all, "tool/cargo_fetch")]
+    async fn cargo_fetch(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
+        args.0.handle(self, "fetch").await
+    }
+
+    #[tool(description = "Runs `cargo build` command directly without a terminal shell")]
+    #[instrument(skip_all, "tool/cargo_build")]
+    async fn cargo_build(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
+        args.0.handle(self, "build").await
+    }
+
+    #[tool(description = "Runs `cargo test` command directly without a terminal shell")]
+    #[instrument(skip_all, "tool/cargo_test")]
+    async fn cargo_test(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
+        args.0.handle(self, "test").await
+    }
+
+    #[tool(description = "Runs `cargo check` command directly without a terminal shell")]
+    #[instrument(skip_all, "tool/cargo_check")]
+    async fn cargo_check(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
+        args.0.handle(self, "check").await
+    }
+
+    #[tool(description = "Runs `cargo clippy` command directly without a terminal shell")]
+    #[instrument(skip_all, "tool/cargo_clippy")]
+    async fn cargo_clippy(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
+        args.0.handle(self, "clippy").await
     }
 }

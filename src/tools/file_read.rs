@@ -11,7 +11,7 @@ use crate::CargoRunner;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ReadFileTool {
+pub struct FileReadTool {
     /// path to file being read
     path: String,
     /// read starting from this line
@@ -20,7 +20,7 @@ pub struct ReadFileTool {
     line_count: Option<NonZeroUsize>,
 }
 
-impl ReadFileTool {
+impl FileReadTool {
     pub async fn handle(self, context: &CargoRunner) -> Result<String, ErrorData> {
         let _ = context;
         let start_line = self.start_line.unwrap_or_default();
