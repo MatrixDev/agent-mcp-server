@@ -12,7 +12,7 @@ use crate::permissions::{Permissions, PermissionsGroup, PermissionsKind};
 #[derive(Debug)]
 pub struct McpAgentContext {
     path_resolver: PathResolver,
-    pub permissions: Permissions,
+    permissions: Permissions,
 }
 
 impl McpAgentContext {

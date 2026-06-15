@@ -25,6 +25,8 @@ use crate::tools::file_edit::FileEditTool;
 use crate::tools::file_move::FileMoveTool;
 use crate::tools::file_read::FileReadTool;
 use crate::tools::file_write::FileWriteTool;
+use crate::tools::glob::GlobTool;
+use crate::tools::grep::GrepTool;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[tokio::main]
@@ -142,8 +144,8 @@ impl McpAgentHandler {
     }
 
     #[tool(description = "Replace a range of lines in a file with new text")]
-    #[instrument(skip_all, "tool/edit_file_lines")]
-    pub async fn edit_file_lines(&self, args: Parameters<FileEditTool>) -> Result<String, ErrorData> {
+    #[instrument(skip_all, "tool/edit_file")]
+    pub async fn edit_file(&self, args: Parameters<FileEditTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         args.0.handle(self.try_get_context()?).await
     }
@@ -165,6 +167,20 @@ impl McpAgentHandler {
     #[tool(description = "Create a directory, including parents")]
     #[instrument(skip_all, "tool/make_directory")]
     pub async fn make_directory(&self, args: Parameters<DirectoryMakeTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?).await
+    }
+
+    #[tool(description = "Find files by glob pattern, eg \"**/*.rs\" or \"src/*.toml\"")]
+    #[instrument(skip_all, "tool/glob")]
+    pub async fn glob(&self, args: Parameters<GlobTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?).await
+    }
+
+    #[tool(description = "Search file contents with a regular expression and return matching lines")]
+    #[instrument(skip_all, "tool/grep")]
+    pub async fn grep(&self, args: Parameters<GrepTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         args.0.handle(self.try_get_context()?).await
     }

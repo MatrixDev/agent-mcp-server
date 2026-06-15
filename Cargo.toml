@@ -10,5 +10,6 @@ serde = { version = "1.0.228", features = ["derive"] }
 anyhow = "1"
 axum = "0.8"
 http = "1"
+regex = "1.12.4"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
