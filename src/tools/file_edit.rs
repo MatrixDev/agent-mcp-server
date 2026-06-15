@@ -14,7 +14,7 @@ pub struct FileEditTool {
     /// replace starting from this line
     start_line: usize,
     /// replace this amount of lines, zero inserts without removing any
-    line_count: usize,
+    lines_count: usize,
     /// text inserted in place of the removed lines
     new_text: String,
 }
@@ -38,7 +38,7 @@ impl FileEditTool {
         if !self.new_text.is_empty() && !self.new_text.ends_with('\n') {
             buffer.push('\n');
         }
-        buffer.extend(lines.skip(self.line_count));
+        buffer.extend(lines.skip(self.lines_count));
 
         if let Err(e) = tokio::fs::write(&path, buffer).await {
             let message = format!("failed to write a file: {}\n{e}", path.display());

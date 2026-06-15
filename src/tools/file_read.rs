@@ -32,8 +32,10 @@ impl FileReadTool {
 
         let result = contents
             .split_inclusive('\n')
+            .enumerate()
             .skip(self.offset.unwrap_or(0))
             .take(self.limit.map_or(usize::MAX, NonZeroUsize::get))
+            .map(|(index, line)| format!("{:>6} {line}", index + 1))
             .collect::<String>();
 
         Ok(result)

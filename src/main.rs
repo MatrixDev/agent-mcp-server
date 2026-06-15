@@ -3,6 +3,7 @@ mod path_resolver;
 mod permissions;
 mod tools;
 
+use std::num::NonZeroUsize;
 use std::sync::{Arc, OnceLock};
 
 use rmcp::handler::server::wrapper::Parameters;
@@ -129,7 +130,7 @@ impl McpAgentHandler {
     // File system
     ////////////////////////////////////////////////////////////////////////////////
 
-    #[tool(description = "Read a file")]
+    #[tool(description = "Read a file, returns content range with numbered lines")]
     #[instrument(skip_all, "tool/read_file")]
     pub async fn read_file(&self, args: Parameters<FileReadTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
