@@ -106,7 +106,7 @@ impl McpAgentContext {
         // fs write deny
         for path in [".git/"] {
             permissions
-                .register_fs_entry(PermissionsGroup::FsWrite, PermissionsKind::Allow, path)
+                .register_fs_entry(PermissionsGroup::FsWrite, PermissionsKind::Deny, path)
                 .await?;
         }
 
