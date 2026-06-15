@@ -5,28 +5,24 @@ use rmcp::ErrorData;
 use serde::Deserialize;
 use tracing::error;
 
-use crate::CargoRunner;
+use crate::context::McpAgentContext;
+use crate::permissions::PermissionsGroup;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct FileReadTool {
     /// path to file being read
     path: String,
-    /// read starting from this line
-    start_line: Option<usize>,
-    /// read this amount of lines
-    line_count: Option<NonZeroUsize>,
+    /// 0-based line number to start at (lines, not bytes). Defaults to the start of the file.
+    offset: Option<usize>,
+    /// Maximum number of lines to return (lines, not bytes). Defaults to the whole file.
+    limit: Option<NonZeroUsize>,
 }
 
 impl FileReadTool {
-    pub async fn handle(self, context: &CargoRunner) -> Result<String, ErrorData> {
-        let _ = context;
-
-        let Ok(path) = tokio::fs::canonicalize(&self.path).await else {
-            let message = format!("failed to canonicalize path: {}", self.path);
-            error!("{message}");
-            return Err(ErrorData::invalid_request(message, None));
-        };
+    pub async fn handle(self, context: &McpAgentContext) -> Result<String, ErrorData> {
+        let path = context.resolve_path(&self.path).await?;
+        context.check_permissions(PermissionsGroup::FsRead, &path).await?;
 
         let Ok(contents) = tokio::fs::read_to_string(&path).await else {
             let message = format!("failed to read a file: {}", path.display());
@@ -36,8 +32,8 @@ impl FileReadTool {
 
         let result = contents
             .split_inclusive('\n')
-            .skip(self.start_line.unwrap_or(0))
-            .take(self.line_count.map_or(usize::MAX, NonZeroUsize::get))
+            .skip(self.offset.unwrap_or(0))
+            .take(self.limit.map_or(usize::MAX, NonZeroUsize::get))
             .collect::<String>();
 
         Ok(result)

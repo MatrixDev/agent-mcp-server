@@ -3,7 +3,8 @@ use rmcp::ErrorData;
 use serde::Deserialize;
 use tracing::error;
 
-use crate::CargoRunner;
+use crate::context::McpAgentContext;
+use crate::permissions::PermissionsGroup;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -13,8 +14,9 @@ pub struct DirectoryMakeTool {
 }
 
 impl DirectoryMakeTool {
-    pub async fn handle(self, context: &CargoRunner) -> Result<String, ErrorData> {
-        let _ = context;
+    pub async fn handle(self, context: &McpAgentContext) -> Result<String, ErrorData> {
+        let path = context.resolve_path(&self.path).await?;
+        context.check_permissions(PermissionsGroup::FsWrite, &path).await?;
 
         if tokio::fs::create_dir_all(&self.path).await.is_err() {
             let message = format!("failed to create a directory: {}", self.path);

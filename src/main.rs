@@ -1,6 +1,8 @@
+mod context;
+mod path_resolver;
+mod permissions;
 mod tools;
 
-use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use rmcp::handler::server::wrapper::Parameters;
@@ -15,11 +17,11 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+use crate::context::McpAgentContext;
 use crate::tools::cargo_exec::CargoRunTool;
 use crate::tools::directory_list::DirectoryListTool;
 use crate::tools::directory_make::DirectoryMakeTool;
 use crate::tools::file_edit::FileEditTool;
-use crate::tools::file_edit_lines::FileEditLinesTool;
 use crate::tools::file_move::FileMoveTool;
 use crate::tools::file_read::FileReadTool;
 use crate::tools::file_write::FileWriteTool;
@@ -43,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
 ////////////////////////////////////////////////////////////////////////////////
 #[instrument(skip_all, "serve_stdio")]
 async fn serve_stdio() -> anyhow::Result<()> {
-    let service = CargoRunner::default()
+    let service = McpAgentHandler::new()?
         .serve((tokio::io::stdin(), tokio::io::stdout()))
         .await?;
     service.waiting().await?;
@@ -54,7 +56,7 @@ async fn serve_stdio() -> anyhow::Result<()> {
 #[instrument(skip_all, "serve_http")]
 async fn serve_http() -> anyhow::Result<()> {
     let service = StreamableHttpService::new(
-        || Ok::<_, std::io::Error>(CargoRunner::default()),
+        McpAgentHandler::new,
         Arc::new(LocalSessionManager::default()),
         StreamableHttpServerConfig::default(),
     );
@@ -67,14 +69,20 @@ async fn serve_http() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(Default, Clone)]
-struct CargoRunner {
-    workspace_root: OnceLock<PathBuf>,
+////////////////////////////////////////////////////////////////////////////////
+struct McpAgentHandler {
+    context: OnceLock<McpAgentContext>,
 }
 
-impl CargoRunner {
-    const HEADER_WORKSPACE_ROOT: &'static str = "x-mcp-workspace-root";
+impl McpAgentHandler {
+    ////////////////////////////////////////////////////////////////////////////////
+    pub fn new() -> std::io::Result<Self> {
+        Ok(Self {
+            context: Default::default(),
+        })
+    }
 
+    ////////////////////////////////////////////////////////////////////////////////
     async fn do_initialize(
         &self,
         request: InitializeRequestParams,
@@ -82,62 +90,27 @@ impl CargoRunner {
     ) -> Result<InitializeResult, ErrorData> {
         info!("client: {} v{}", request.client_info.name, request.client_info.version);
 
-        let Some(request_parts) = context.extensions.get::<http::request::Parts>() else {
-            let message = "failed to parse request http parts";
-            error!("{message}");
-            return Err(ErrorData::invalid_request(message, None));
-        };
-
-        let Some(workspace_root) = request_parts.headers.get(Self::HEADER_WORKSPACE_ROOT) else {
-            let message = format!("{} header is missing", Self::HEADER_WORKSPACE_ROOT);
-            error!("{message}");
-            return Err(ErrorData::invalid_request(message, None));
-        };
-
-        let Ok(workspace_root) = workspace_root.to_str() else {
-            let message = format!("{} header is invalid", Self::HEADER_WORKSPACE_ROOT);
-            error!("{message}");
-            return Err(ErrorData::invalid_request(message, None));
-        };
-
-        let Ok(workspace_root) = Path::new(workspace_root).canonicalize() else {
-            let message = format!("failed to canonicalize workspace root: {workspace_root}");
-            error!("{message}");
-            return Err(ErrorData::invalid_request(message, None));
-        };
-
-        info!("working directory: {}", workspace_root.display());
-        self.workspace_root.get_or_init(|| workspace_root);
+        let context = McpAgentContext::new(&context).await?;
+        let context = self.context.get_or_init(|| context);
+        info!("context initialized: {context:#?}");
 
         // do it dynamically? Zed doesn't support this
         // let _ = self.roots_supported.set(request.capabilities.roots.is_some());
         Ok(self.get_info())
     }
 
-    async fn resolve_workspace_dir(&self, path: impl AsRef<Path>) -> Result<PathBuf, ErrorData> {
-        let Some(workspace_root) = self.workspace_root.get() else {
-            let message = "workspace root is missing";
+    ////////////////////////////////////////////////////////////////////////////////
+    pub fn try_get_context(&self) -> Result<&McpAgentContext, ErrorData> {
+        self.context.get().ok_or_else(|| {
+            let message = "context was not initialized";
             error!("{message}");
-            return Err(ErrorData::invalid_request(message, None));
-        };
-
-        let Ok(path) = tokio::fs::canonicalize(path.as_ref()).await else {
-            let message = format!("failed to canonicalize workspace dir: {}", path.as_ref().display());
-            error!("{message}");
-            return Err(ErrorData::invalid_request(message, None));
-        };
-
-        if !path.starts_with(workspace_root) {
-            let message = format!("{path:?} is not child of {workspace_root:?}");
-            error!("{message}");
-            return Err(ErrorData::invalid_request(message, None));
-        }
-        Ok(path)
+            ErrorData::invalid_request(message, None)
+        })
     }
 }
 
 #[tool_handler(router = Self::tool_router())]
-impl ServerHandler for CargoRunner {
+impl ServerHandler for McpAgentHandler {
     #[instrument(skip_all, "initialize")]
     async fn initialize(
         &self,
@@ -149,7 +122,7 @@ impl ServerHandler for CargoRunner {
 }
 
 #[tool_router]
-impl CargoRunner {
+impl McpAgentHandler {
     ////////////////////////////////////////////////////////////////////////////////
     // File system
     ////////////////////////////////////////////////////////////////////////////////
@@ -157,43 +130,43 @@ impl CargoRunner {
     #[tool(description = "Read a file")]
     #[instrument(skip_all, "tool/read_file")]
     pub async fn read_file(&self, args: Parameters<FileReadTool>) -> Result<String, ErrorData> {
-        args.0.handle(self).await
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?).await
     }
 
     #[tool(description = "Write a file, overwriting any existing contents")]
     #[instrument(skip_all, "tool/write_file")]
     pub async fn write_file(&self, args: Parameters<FileWriteTool>) -> Result<String, ErrorData> {
-        args.0.handle(self).await
-    }
-
-    #[tool(description = "Edit a file by replacing a unique string")]
-    #[instrument(skip_all, "tool/edit_file")]
-    pub async fn edit_file(&self, args: Parameters<FileEditTool>) -> Result<String, ErrorData> {
-        args.0.handle(self).await
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?).await
     }
 
     #[tool(description = "Replace a range of lines in a file with new text")]
     #[instrument(skip_all, "tool/edit_file_lines")]
-    pub async fn edit_file_lines(&self, args: Parameters<FileEditLinesTool>) -> Result<String, ErrorData> {
-        args.0.handle(self).await
+    pub async fn edit_file_lines(&self, args: Parameters<FileEditTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?).await
     }
 
     #[tool(description = "Move or rename a file or directory")]
     #[instrument(skip_all, "tool/move_file")]
     pub async fn move_file(&self, args: Parameters<FileMoveTool>) -> Result<String, ErrorData> {
-        args.0.handle(self).await
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?).await
     }
 
     #[tool(description = "List the entries of a directory")]
     #[instrument(skip_all, "tool/list_directory")]
     pub async fn list_directory(&self, args: Parameters<DirectoryListTool>) -> Result<String, ErrorData> {
-        args.0.handle(self).await
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?).await
     }
 
     #[tool(description = "Create a directory, including parents")]
     #[instrument(skip_all, "tool/make_directory")]
     pub async fn make_directory(&self, args: Parameters<DirectoryMakeTool>) -> Result<String, ErrorData> {
-        args.0.handle(self).await
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?).await
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -203,30 +176,35 @@ impl CargoRunner {
     #[tool(description = "Runs `cargo fetch` command directly without a terminal shell")]
     #[instrument(skip_all, "tool/cargo_fetch")]
     async fn cargo_fetch(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        args.0.handle(self, "fetch").await
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?, "fetch").await
     }
 
     #[tool(description = "Runs `cargo build` command directly without a terminal shell")]
     #[instrument(skip_all, "tool/cargo_build")]
     async fn cargo_build(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        args.0.handle(self, "build").await
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?, "build").await
     }
 
     #[tool(description = "Runs `cargo test` command directly without a terminal shell")]
     #[instrument(skip_all, "tool/cargo_test")]
     async fn cargo_test(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        args.0.handle(self, "test").await
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?, "test").await
     }
 
     #[tool(description = "Runs `cargo check` command directly without a terminal shell")]
     #[instrument(skip_all, "tool/cargo_check")]
     async fn cargo_check(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        args.0.handle(self, "check").await
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?, "check").await
     }
 
     #[tool(description = "Runs `cargo clippy` command directly without a terminal shell")]
     #[instrument(skip_all, "tool/cargo_clippy")]
     async fn cargo_clippy(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        args.0.handle(self, "clippy").await
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?, "clippy").await
     }
 }

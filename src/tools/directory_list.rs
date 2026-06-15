@@ -3,7 +3,8 @@ use rmcp::ErrorData;
 use serde::Deserialize;
 use tracing::error;
 
-use crate::CargoRunner;
+use crate::context::McpAgentContext;
+use crate::permissions::PermissionsGroup;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -13,14 +14,9 @@ pub struct DirectoryListTool {
 }
 
 impl DirectoryListTool {
-    pub async fn handle(self, context: &CargoRunner) -> Result<String, ErrorData> {
-        let _ = context;
-
-        let Ok(path) = tokio::fs::canonicalize(&self.path).await else {
-            let message = format!("failed to canonicalize path: {}", self.path);
-            error!("{message}");
-            return Err(ErrorData::invalid_request(message, None));
-        };
+    pub async fn handle(self, context: &McpAgentContext) -> Result<String, ErrorData> {
+        let path = context.resolve_path(&self.path).await?;
+        context.check_permissions(PermissionsGroup::FsRead, &path).await?;
 
         let Ok(mut entries) = tokio::fs::read_dir(&path).await else {
             let message = format!("failed to read a directory: {}", path.display());

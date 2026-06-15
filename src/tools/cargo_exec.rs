@@ -4,9 +4,9 @@ use rmcp::schemars::{self, JsonSchema};
 use rmcp::ErrorData;
 use serde::Deserialize;
 use tokio::process::Command;
-use tracing::{error, info};
+use tracing::error;
 
-use crate::CargoRunner;
+use crate::context::McpAgentContext;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -18,10 +18,8 @@ pub struct CargoRunTool {
 }
 
 impl CargoRunTool {
-    pub async fn handle(self, context: &CargoRunner, subcommand: &str) -> Result<String, ErrorData> {
-        info!(subcommand, ?self, "run");
-
-        let project_dir = context.resolve_workspace_dir(&self.project_dir).await?;
+    pub async fn handle(self, context: &McpAgentContext, subcommand: &str) -> Result<String, ErrorData> {
+        let project_dir = context.resolve_path(&self.project_dir).await?;
         let output = Command::new("cargo")
             .arg(subcommand)
             .args(&self.arguments)
