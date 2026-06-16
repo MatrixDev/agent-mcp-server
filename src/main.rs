@@ -27,6 +27,7 @@ use crate::tools::file_read::FileReadTool;
 use crate::tools::file_write::FileWriteTool;
 use crate::tools::glob::GlobTool;
 use crate::tools::grep::GrepTool;
+use crate::tools::ieee1905_bench::Ieee1905BenchTool;
 use crate::tools::lights_info::LightsInfoTool;
 use crate::tools::lights_set_color::LightsSetColorTool;
 
@@ -75,7 +76,7 @@ async fn serve_http() -> anyhow::Result<()> {
 
 ////////////////////////////////////////////////////////////////////////////////
 struct McpAgentHandler {
-    context: OnceLock<McpAgentContext>,
+    context: Arc<OnceLock<McpAgentContext>>,
 }
 
 impl McpAgentHandler {
@@ -94,9 +95,22 @@ impl McpAgentHandler {
     ) -> Result<InitializeResult, ErrorData> {
         info!("client: {} v{}", request.client_info.name, request.client_info.version);
 
-        let context = McpAgentContext::new(&context).await?;
-        let context = self.context.get_or_init(|| context);
-        info!("context initialized: {context:#?}");
+        let context_cell = self.context.clone();
+        tokio::spawn(async move {
+            match McpAgentContext::new(&context).await {
+                Ok(e) => {
+                    info!("context initialized: {e:#?}");
+                    context_cell.get_or_init(|| e);
+                }
+                Err(e) => {
+                    error!("failed to initialize context: {e}");
+                }
+            }
+        });
+
+        // let context = McpAgentContext::new(&context).await?;
+        // let context = self.context.get_or_init(|| context);
+        // info!("context initialized: {context:#?}");
 
         // do it dynamically? Zed doesn't support this
         // let _ = self.roots_supported.set(request.capabilities.roots.is_some());
@@ -185,6 +199,19 @@ impl McpAgentHandler {
     pub async fn grep(&self, args: Parameters<GrepTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         args.0.handle(self.try_get_context()?).await
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Benchmarks
+    ////////////////////////////////////////////////////////////////////////////////
+
+    #[tool(
+        description = "Run the ieee1905 release binary for 5s under `/usr/bin/time -v` and return its resource-usage report"
+    )]
+    #[instrument(skip_all, "tool/ieee1905_bench")]
+    pub async fn ieee1905_bench(&self, args: Parameters<Ieee1905BenchTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle().await
     }
 
     ////////////////////////////////////////////////////////////////////////////////

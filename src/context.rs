@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::anyhow;
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer};
-use tracing::error;
+use tracing::{debug, error, warn};
 
 use crate::path_resolver::PathResolver;
 use crate::permissions::{Permissions, PermissionsGroup, PermissionsKind};
@@ -64,6 +64,19 @@ impl McpAgentContext {
 
     ////////////////////////////////////////////////////////////////////////////////
     async fn prepare_path_resolver(context: &RequestContext<RoleServer>) -> anyhow::Result<PathResolver> {
+        let workspace_root = match Self::read_workspace_root_header(context).await {
+            Ok(e) => e,
+            Err(e) => {
+                warn!("read_workspace_root_header failed: {e}");
+                Self::fetch_peer_list_roots(context).await?
+            }
+        };
+
+        Ok(PathResolver::new(workspace_root)?)
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    async fn read_workspace_root_header(context: &RequestContext<RoleServer>) -> anyhow::Result<PathBuf> {
         let request_parts = context
             .extensions
             .get::<http::request::Parts>()
@@ -82,7 +95,26 @@ impl McpAgentContext {
             .await
             .map_err(|e| anyhow!("failed to canonicalize workspace root {workspace_root}: {e}"))?;
 
-        Ok(PathResolver::new(workspace_root)?)
+        Ok(workspace_root)
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    async fn fetch_peer_list_roots(context: &RequestContext<RoleServer>) -> anyhow::Result<PathBuf> {
+        debug!("fetching list_roots");
+
+        let roots = context.peer.list_roots();
+        let roots = roots.await.map_err(|e| anyhow!("list_roots failed: {e}"))?;
+        debug!("roots = {roots:#?}");
+
+        let root = &mut roots.roots.iter().filter_map(|e| e.uri.strip_prefix("file://"));
+        let root = root.next().ok_or_else(|| anyhow!("no root found"))?;
+        debug!("selected root = {root:#?}");
+
+        let workspace_root = tokio::fs::canonicalize(root)
+            .await
+            .map_err(|e| anyhow!("failed to canonicalize workspace root {root}: {e}"))?;
+
+        Ok(workspace_root)
     }
 
     ////////////////////////////////////////////////////////////////////////////////
