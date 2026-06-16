@@ -7,3 +7,5 @@ pub mod file_read;
 pub mod file_write;
 pub mod glob;
 pub mod grep;
+pub mod lights_info;
+pub mod lights_set_color;

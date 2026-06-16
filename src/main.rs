@@ -3,7 +3,6 @@ mod path_resolver;
 mod permissions;
 mod tools;
 
-use std::num::NonZeroUsize;
 use std::sync::{Arc, OnceLock};
 
 use rmcp::handler::server::wrapper::Parameters;
@@ -28,6 +27,8 @@ use crate::tools::file_read::FileReadTool;
 use crate::tools::file_write::FileWriteTool;
 use crate::tools::glob::GlobTool;
 use crate::tools::grep::GrepTool;
+use crate::tools::lights_info::LightsInfoTool;
+use crate::tools::lights_set_color::LightsSetColorTool;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[tokio::main]
@@ -223,5 +224,23 @@ impl McpAgentHandler {
     async fn cargo_clippy(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         args.0.handle(self.try_get_context()?, "clippy").await
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Playing
+    ////////////////////////////////////////////////////////////////////////////////
+
+    #[tool(description = "Returns information about available smart lights")]
+    #[instrument(skip_all, "tool/lights_info")]
+    async fn lights_info(&self, args: Parameters<LightsInfoTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?).await
+    }
+
+    #[tool(description = "Sets smart light with provided name to requested color")]
+    #[instrument(skip_all, "tool/lights_set_color")]
+    async fn lights_set_color(&self, args: Parameters<LightsSetColorTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?).await
     }
 }
