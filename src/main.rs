@@ -18,19 +18,19 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::context::McpAgentContext;
-use crate::tools::cargo_exec::CargoRunTool;
-use crate::tools::directory_list::DirectoryListTool;
-use crate::tools::directory_make::DirectoryMakeTool;
-use crate::tools::file_edit::FileEditTool;
-use crate::tools::file_move::FileMoveTool;
-use crate::tools::file_read::FileReadTool;
-use crate::tools::file_write::FileWriteTool;
-use crate::tools::glob::GlobTool;
-use crate::tools::gradle_exec::GradleRunTool;
-use crate::tools::grep::GrepTool;
 use crate::tools::ieee1905_bench::Ieee1905BenchTool;
-use crate::tools::lights_info::LightsInfoTool;
-use crate::tools::lights_set_color::LightsSetColorTool;
+use tools::exec::cargo_exec::CargoRunTool;
+use tools::exec::gradle_exec::GradleRunTool;
+use tools::fs::directory_list::DirectoryListTool;
+use tools::fs::directory_make::DirectoryMakeTool;
+use tools::fs::file_edit::FileEditTool;
+use tools::fs::file_move::FileMoveTool;
+use tools::fs::file_read::FileReadTool;
+use tools::fs::file_write::FileWriteTool;
+use tools::fs::glob::GlobTool;
+use tools::fs::grep::GrepTool;
+use tools::lights::lights_info::LightsInfoTool;
+use tools::lights::lights_set_color::LightsSetColorTool;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[tokio::main]
@@ -293,7 +293,7 @@ impl McpAgentHandler {
         info!("started: {args:#?}");
         args.0.handle(self.try_get_context()?, "clean").await
     }
-    
+
     ////////////////////////////////////////////////////////////////////////////////
     // Playing
     ////////////////////////////////////////////////////////////////////////////////
@@ -302,7 +302,7 @@ impl McpAgentHandler {
     #[instrument(skip_all, "tool/lights_info")]
     async fn lights_info(&self, args: Parameters<LightsInfoTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        args.0.handle().await
     }
 
     #[tool(description = "Sets smart light with provided name to requested color")]

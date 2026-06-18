@@ -1,13 +1,4 @@
-pub mod cargo_exec;
-pub mod directory_list;
-pub mod directory_make;
-pub mod file_edit;
-pub mod file_move;
-pub mod file_read;
-pub mod file_write;
-pub mod glob;
-pub mod gradle_exec;
-pub mod grep;
+pub mod exec;
+pub mod fs;
 pub mod ieee1905_bench;
-pub mod lights_info;
-pub mod lights_set_color;
+pub mod lights;

@@ -27,7 +27,7 @@ impl GlobTool {
     ////////////////////////////////////////////////////////////////////////////////
     pub async fn handle(self, context: &McpAgentContext) -> Result<String, ErrorData> {
         let path = context.resolve_path(self.path.as_deref().unwrap_or(".")).await?;
-        let workspace = context.resolve_path(".").await?;
+        let workspace = context.resolve_path("../../..").await?;
         context.check_permissions(PermissionsGroup::FsRead, &path).await?;
 
         let mut results = Vec::new();
