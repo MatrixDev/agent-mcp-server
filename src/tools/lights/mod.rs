@@ -9,7 +9,7 @@ pub mod lights_info;
 pub mod lights_set_color;
 
 ////////////////////////////////////////////////////////////////////////////////
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct LedDevice {
     id: String,
     name: String,

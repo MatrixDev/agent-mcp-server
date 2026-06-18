@@ -305,10 +305,10 @@ impl McpAgentHandler {
         args.0.handle().await
     }
 
-    #[tool(description = "Sets smart light with provided name to requested color")]
+    #[tool(description = "Sets smart light with provided id to requested color")]
     #[instrument(skip_all, "tool/lights_set_color")]
     async fn lights_set_color(&self, args: Parameters<LightsSetColorTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        args.0.handle().await
     }
 }
