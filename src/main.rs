@@ -12,13 +12,6 @@ use rmcp::transport::streamable_http_server::session::local::LocalSessionManager
 use rmcp::transport::streamable_http_server::StreamableHttpService;
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::{tool, tool_handler, tool_router, ErrorData, RoleServer, ServerHandler, ServiceExt};
-use tracing::{error, info, instrument};
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-
-use crate::context::McpAgentContext;
-use crate::tools::ieee1905_bench::Ieee1905BenchTool;
 use tools::exec::cargo_exec::CargoRunTool;
 use tools::exec::gradle_exec::GradleRunTool;
 use tools::fs::directory_list::DirectoryListTool;
@@ -31,6 +24,14 @@ use tools::fs::glob::GlobTool;
 use tools::fs::grep::GrepTool;
 use tools::lights::lights_info::LightsInfoTool;
 use tools::lights::lights_set_color::LightsSetColorTool;
+use tracing::{error, info, instrument};
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+
+use crate::context::McpAgentContext;
+use crate::tools::ieee1905_bench::Ieee1905BenchTool;
+use crate::tools::lights::controller::LightsController;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[tokio::main]
@@ -51,7 +52,8 @@ async fn main() -> anyhow::Result<()> {
 ////////////////////////////////////////////////////////////////////////////////
 #[instrument(skip_all, "serve_stdio")]
 async fn serve_stdio() -> anyhow::Result<()> {
-    let service = McpAgentHandler::new()?
+    let lights = LightsController::new()?;
+    let service = McpAgentHandler::new(lights)?
         .serve((tokio::io::stdin(), tokio::io::stdout()))
         .await?;
     service.waiting().await?;
@@ -61,8 +63,9 @@ async fn serve_stdio() -> anyhow::Result<()> {
 ////////////////////////////////////////////////////////////////////////////////
 #[instrument(skip_all, "serve_http")]
 async fn serve_http() -> anyhow::Result<()> {
+    let lights = LightsController::new()?;
     let service = StreamableHttpService::new(
-        McpAgentHandler::new,
+        move || McpAgentHandler::new(lights.clone()),
         Arc::new(LocalSessionManager::default()),
         StreamableHttpServerConfig::default(),
     );
@@ -77,13 +80,15 @@ async fn serve_http() -> anyhow::Result<()> {
 
 ////////////////////////////////////////////////////////////////////////////////
 struct McpAgentHandler {
+    lights: LightsController,
     context: Arc<OnceLock<McpAgentContext>>,
 }
 
 impl McpAgentHandler {
     ////////////////////////////////////////////////////////////////////////////////
-    pub fn new() -> std::io::Result<Self> {
+    pub fn new(lights: LightsController) -> std::io::Result<Self> {
         Ok(Self {
+            lights,
             context: Default::default(),
         })
     }
@@ -97,8 +102,9 @@ impl McpAgentHandler {
         info!("client: {} v{}", request.client_info.name, request.client_info.version);
 
         let context_cell = self.context.clone();
+        let lights = self.lights.clone();
         tokio::spawn(async move {
-            match McpAgentContext::new(&context).await {
+            match McpAgentContext::new(&context, lights).await {
                 Ok(e) => {
                     info!("context initialized: {e:#?}");
                     context_cell.get_or_init(|| e);
@@ -254,7 +260,6 @@ impl McpAgentHandler {
         args.0.handle(self.try_get_context()?, "clippy").await
     }
 
-
     ////////////////////////////////////////////////////////////////////////////////
     // Gradle
     ////////////////////////////////////////////////////////////////////////////////
@@ -302,13 +307,13 @@ impl McpAgentHandler {
     #[instrument(skip_all, "tool/lights_info")]
     async fn lights_info(&self, args: Parameters<LightsInfoTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle().await
+        args.0.handle(self.try_get_context()?).await
     }
 
     #[tool(description = "Sets smart light with provided id to requested color")]
     #[instrument(skip_all, "tool/lights_set_color")]
     async fn lights_set_color(&self, args: Parameters<LightsSetColorTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle().await
+        args.0.handle(self.try_get_context()?).await
     }
 }

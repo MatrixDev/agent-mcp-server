@@ -7,19 +7,21 @@ use tracing::{debug, error, warn};
 
 use crate::path_resolver::PathResolver;
 use crate::permissions::{Permissions, PermissionsGroup, PermissionsKind};
+use crate::tools::lights::controller::LightsController;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug)]
 pub struct McpAgentContext {
     path_resolver: PathResolver,
     permissions: Permissions,
+    pub lights: LightsController,
 }
 
 impl McpAgentContext {
     const HEADER_WORKSPACE_ROOT: &'static str = "x-mcp-workspace-root";
 
     ////////////////////////////////////////////////////////////////////////////////
-    pub async fn new(context: &RequestContext<RoleServer>) -> Result<Self, ErrorData> {
+    pub async fn new(context: &RequestContext<RoleServer>, lights: LightsController) -> Result<Self, ErrorData> {
         let path_resolver = match Self::prepare_path_resolver(context).await {
             Ok(e) => e,
             Err(e) => {
@@ -41,6 +43,7 @@ impl McpAgentContext {
         Ok(Self {
             path_resolver,
             permissions,
+            lights,
         })
     }
 

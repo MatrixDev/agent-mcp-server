@@ -1,11 +1,9 @@
-use std::time::Duration;
-
 use rmcp::schemars::{self, JsonSchema};
 use rmcp::ErrorData;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
-use crate::tools::lights::LedDevice;
+use crate::context::McpAgentContext;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -17,37 +15,22 @@ pub struct LightsSetColorTool {
 }
 
 impl LightsSetColorTool {
-    const HTTP_TIMEOUT: Duration = Duration::from_secs(2);
-
     ////////////////////////////////////////////////////////////////////////////////
-    pub async fn handle(self) -> Result<String, ErrorData> {
-        let rgb = self.color_rgb.map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8);
-
-        // Resolve the target from the cache populated by `lights_info` — no rescan.
-        let target = self.id.trim();
-        let Some(device) = LedDevice::lock_cache().await.get(target).cloned() else {
+    pub async fn handle(self, context: &McpAgentContext) -> Result<String, ErrorData> {
+        let device_id = self.id.trim();
+        let device_url = context.lights.get_device_url(device_id).await.ok_or_else(|| {
             let message = format!("no light with id {:?} found in cache; run lights_info first", self.id);
             error!("{message}");
-            return Err(ErrorData::invalid_request(message, None));
-        };
+            ErrorData::invalid_request(message, None)
+        })?;
 
-        let client = reqwest::Client::builder()
-            .timeout(Self::HTTP_TIMEOUT)
-            .build()
-            .map_err(|e| {
-                let message = format!("failed to build HTTP client: {e}");
-                error!("{message}");
-                ErrorData::internal_error(message, None)
-            })?;
+        self.set_color(context, &device_url).await?;
 
-        Self::set_color(&client, &device, rgb).await?;
-
-        Ok(format!("set light for {} to rgb{rgb:?}", device.id))
+        Ok(format!("set light for {:?} to rgb{:?}", device_id, self.color_rgb))
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    async fn set_color(client: &reqwest::Client, device: &LedDevice, [r, g, b]: [u8; 3]) -> Result<(), ErrorData> {
-        /// https://kno.wled.ge/interfaces/json-api/
+    async fn set_color(&self, context: &McpAgentContext, device_url: &str) -> Result<(), ErrorData> {
         #[derive(Debug, Serialize)]
         struct WledState {
             on: bool,
@@ -59,24 +42,16 @@ impl LightsSetColorTool {
             col: Vec<[u8; 3]>,
         }
 
-        let host = device.choose_hostname();
-
-        // Bracket IPv6 literals for the URL authority.
-        let authority = if host.contains(':') {
-            format!("[{host}]:{}", device.port)
-        } else {
-            format!("{host}:{}", device.port)
-        };
-
-        let url = format!("http://{authority}/json/state");
+        let [r, g, b] = self.color_rgb.map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8);
+        let url = format!("{device_url}/json/state");
         let state = WledState {
             on: true,
             seg: vec![WledSegment { col: vec![[r, g, b]] }],
         };
 
-        client
-            .post(&url)
-            .json(&state)
+        let client = context.lights.client();
+        let request = client.post(&url).json(&state);
+        request
             .send()
             .await
             .and_then(|response| response.error_for_status())
