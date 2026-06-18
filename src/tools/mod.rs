@@ -6,6 +6,7 @@ pub mod file_move;
 pub mod file_read;
 pub mod file_write;
 pub mod glob;
+pub mod gradle_exec;
 pub mod grep;
 pub mod ieee1905_bench;
 pub mod lights_info;

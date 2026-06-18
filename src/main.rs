@@ -26,6 +26,7 @@ use crate::tools::file_move::FileMoveTool;
 use crate::tools::file_read::FileReadTool;
 use crate::tools::file_write::FileWriteTool;
 use crate::tools::glob::GlobTool;
+use crate::tools::gradle_exec::GradleRunTool;
 use crate::tools::grep::GrepTool;
 use crate::tools::ieee1905_bench::Ieee1905BenchTool;
 use crate::tools::lights_info::LightsInfoTool;
@@ -253,6 +254,46 @@ impl McpAgentHandler {
         args.0.handle(self.try_get_context()?, "clippy").await
     }
 
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Gradle
+    ////////////////////////////////////////////////////////////////////////////////
+
+    #[tool(description = "Runs `gradle build` task directly without a terminal shell")]
+    #[instrument(skip_all, "tool/gradle_build")]
+    async fn gradle_build(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?, "build").await
+    }
+
+    #[tool(description = "Runs `gradle test` task directly without a terminal shell")]
+    #[instrument(skip_all, "tool/gradle_test")]
+    async fn gradle_test(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?, "test").await
+    }
+
+    #[tool(description = "Runs `gradle check` task directly without a terminal shell")]
+    #[instrument(skip_all, "tool/gradle_check")]
+    async fn gradle_check(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?, "check").await
+    }
+
+    #[tool(description = "Runs `gradle assemble` task directly without a terminal shell")]
+    #[instrument(skip_all, "tool/gradle_assemble")]
+    async fn gradle_assemble(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?, "assemble").await
+    }
+
+    #[tool(description = "Runs `gradle clean` task directly without a terminal shell")]
+    #[instrument(skip_all, "tool/gradle_clean")]
+    async fn gradle_clean(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(self.try_get_context()?, "clean").await
+    }
+    
     ////////////////////////////////////////////////////////////////////////////////
     // Playing
     ////////////////////////////////////////////////////////////////////////////////
