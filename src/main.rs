@@ -12,6 +12,7 @@ use rmcp::transport::streamable_http_server::session::local::LocalSessionManager
 use rmcp::transport::streamable_http_server::StreamableHttpService;
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::{tool, tool_handler, tool_router, ErrorData, RoleServer, ServerHandler, ServiceExt};
+use tokio::sync::Mutex;
 use tools::exec::cargo_exec::CargoRunTool;
 use tools::exec::gradle_exec::GradleRunTool;
 use tools::fs::directory_list::DirectoryListTool;
@@ -81,7 +82,8 @@ async fn serve_http() -> anyhow::Result<()> {
 ////////////////////////////////////////////////////////////////////////////////
 struct McpAgentHandler {
     lights: LightsController,
-    context: Arc<OnceLock<McpAgentContext>>,
+    context: Mutex<Option<Arc<McpAgentContext>>>,
+    init_context: OnceLock<RequestContext<RoleServer>>,
 }
 
 impl McpAgentHandler {
@@ -89,6 +91,7 @@ impl McpAgentHandler {
     pub fn new(lights: LightsController) -> std::io::Result<Self> {
         Ok(Self {
             lights,
+            init_context: Default::default(),
             context: Default::default(),
         })
     }
@@ -100,37 +103,25 @@ impl McpAgentHandler {
         context: RequestContext<RoleServer>,
     ) -> Result<InitializeResult, ErrorData> {
         info!("client: {} v{}", request.client_info.name, request.client_info.version);
-
-        let context_cell = self.context.clone();
-        let lights = self.lights.clone();
-        tokio::spawn(async move {
-            match McpAgentContext::new(&context, lights).await {
-                Ok(e) => {
-                    info!("context initialized: {e:#?}");
-                    context_cell.get_or_init(|| e);
-                }
-                Err(e) => {
-                    error!("failed to initialize context: {e}");
-                }
-            }
-        });
-
-        // let context = McpAgentContext::new(&context).await?;
-        // let context = self.context.get_or_init(|| context);
-        // info!("context initialized: {context:#?}");
-
-        // do it dynamically? Zed doesn't support this
-        // let _ = self.roots_supported.set(request.capabilities.roots.is_some());
+        self.init_context.get_or_init(|| context);
         Ok(self.get_info())
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    pub fn try_get_context(&self) -> Result<&McpAgentContext, ErrorData> {
-        self.context.get().ok_or_else(|| {
-            let message = "context was not initialized";
+    async fn try_get_context(&self) -> Result<Arc<McpAgentContext>, ErrorData> {
+        let context_cell = &mut *self.context.lock().await;
+        if let Some(context) = context_cell {
+            return Ok(context.clone());
+        }
+
+        let init_context = self.init_context.get().ok_or_else(|| {
+            let message = "init context is missing";
             error!("{message}");
-            ErrorData::invalid_request(message, None)
-        })
+            ErrorData::internal_error(message, None)
+        })?;
+
+        let context = McpAgentContext::new(init_context, self.lights.clone()).await?;
+        Ok(context_cell.insert(Arc::new(context)).clone())
     }
 }
 
@@ -156,56 +147,64 @@ impl McpAgentHandler {
     #[instrument(skip_all, "tool/read_file")]
     pub async fn read_file(&self, args: Parameters<FileReadTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
     }
 
     #[tool(description = "Write a file, overwriting any existing contents")]
     #[instrument(skip_all, "tool/write_file")]
     pub async fn write_file(&self, args: Parameters<FileWriteTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
     }
 
     #[tool(description = "Replace a range of lines in a file with new text")]
     #[instrument(skip_all, "tool/edit_file")]
     pub async fn edit_file(&self, args: Parameters<FileEditTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
     }
 
     #[tool(description = "Move or rename a file or directory")]
     #[instrument(skip_all, "tool/move_file")]
     pub async fn move_file(&self, args: Parameters<FileMoveTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
     }
 
     #[tool(description = "List the entries of a directory")]
     #[instrument(skip_all, "tool/list_directory")]
     pub async fn list_directory(&self, args: Parameters<DirectoryListTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
     }
 
     #[tool(description = "Create a directory, including parents")]
     #[instrument(skip_all, "tool/make_directory")]
     pub async fn make_directory(&self, args: Parameters<DirectoryMakeTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
     }
 
     #[tool(description = "Find files by glob pattern, eg \"**/*.rs\" or \"src/*.toml\"")]
     #[instrument(skip_all, "tool/glob")]
     pub async fn glob(&self, args: Parameters<GlobTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
     }
 
     #[tool(description = "Search file contents with a regular expression and return matching lines")]
     #[instrument(skip_all, "tool/grep")]
     pub async fn grep(&self, args: Parameters<GrepTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -229,35 +228,40 @@ impl McpAgentHandler {
     #[instrument(skip_all, "tool/cargo_fetch")]
     async fn cargo_fetch(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?, "fetch").await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "fetch").await
     }
 
     #[tool(description = "Runs `cargo build` command directly without a terminal shell")]
     #[instrument(skip_all, "tool/cargo_build")]
     async fn cargo_build(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?, "build").await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "build").await
     }
 
     #[tool(description = "Runs `cargo test` command directly without a terminal shell")]
     #[instrument(skip_all, "tool/cargo_test")]
     async fn cargo_test(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?, "test").await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "test").await
     }
 
     #[tool(description = "Runs `cargo check` command directly without a terminal shell")]
     #[instrument(skip_all, "tool/cargo_check")]
     async fn cargo_check(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?, "check").await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "check").await
     }
 
     #[tool(description = "Runs `cargo clippy` command directly without a terminal shell")]
     #[instrument(skip_all, "tool/cargo_clippy")]
     async fn cargo_clippy(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?, "clippy").await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "clippy").await
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -268,35 +272,40 @@ impl McpAgentHandler {
     #[instrument(skip_all, "tool/gradle_build")]
     async fn gradle_build(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?, "build").await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "build").await
     }
 
     #[tool(description = "Runs `gradle test` task directly without a terminal shell")]
     #[instrument(skip_all, "tool/gradle_test")]
     async fn gradle_test(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?, "test").await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "test").await
     }
 
     #[tool(description = "Runs `gradle check` task directly without a terminal shell")]
     #[instrument(skip_all, "tool/gradle_check")]
     async fn gradle_check(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?, "check").await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "check").await
     }
 
     #[tool(description = "Runs `gradle assemble` task directly without a terminal shell")]
     #[instrument(skip_all, "tool/gradle_assemble")]
     async fn gradle_assemble(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?, "assemble").await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "assemble").await
     }
 
     #[tool(description = "Runs `gradle clean` task directly without a terminal shell")]
     #[instrument(skip_all, "tool/gradle_clean")]
     async fn gradle_clean(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?, "clean").await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "clean").await
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -307,13 +316,15 @@ impl McpAgentHandler {
     #[instrument(skip_all, "tool/lights_info")]
     async fn lights_info(&self, args: Parameters<LightsInfoTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
     }
 
     #[tool(description = "Sets smart light with provided id to requested color")]
     #[instrument(skip_all, "tool/lights_set_color")]
     async fn lights_set_color(&self, args: Parameters<LightsSetColorTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
-        args.0.handle(self.try_get_context()?).await
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
     }
 }
