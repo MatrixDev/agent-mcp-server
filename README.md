@@ -1,146 +1,207 @@
 # mcp-server
 
-A small [Model Context Protocol](https://modelcontextprotocol.io) server that runs
-`cargo` subcommands directly (without spawning a terminal shell) and returns their
-combined stdout/stderr.
+A [Model Context Protocol](https://modelcontextprotocol.io) server (`mdev`) that exposes
+file-system, build, benchmark, and smart-light tools to an agent. It runs build commands
+directly (without spawning a terminal shell) and returns their combined stdout/stderr.
+
+Two transports are built in:
+
+- **HTTP** (default) — streamable HTTP on `0.0.0.0:9999`, served at `http://localhost:9999/mcp`.
+- **stdio** — run the binary with the `stdio` argument.
+
+Build it with `cargo build --release`; the binary is produced at `target/release/mcp-server`.
 
 ## Tools
 
-Each tool takes two parameters:
+### File system
 
-- `working_directory` — absolute path the command is run from. The agent should pass its
-  own working directory (the project root), so cargo operates on the right crate.
-- `arguments` — array of extra flags appended to the cargo subcommand.
+| Tool             | Description                                                |
+| ---------------- | ---------------------------------------------------------- |
+| `read_file`      | Read a file, returning the content range with line numbers |
+| `write_file`     | Write a file, overwriting any existing contents            |
+| `edit_file`      | Replace a range of lines in a file with new text           |
+| `move_file`      | Move or rename a file or directory                         |
+| `list_directory` | List the entries of a directory                            |
+| `make_directory` | Create a directory, including parents                      |
+| `glob`           | Find files by glob pattern, e.g. `**/*.rs`                 |
+| `grep`           | Search file contents with a regular expression             |
 
-| Tool    | Runs           | Example `arguments`        |
-| ------- | -------------- | -------------------------- |
-| `build` | `cargo build`  | `["--release"]`            |
-| `check` | `cargo check`  | `["--all-targets"]`        |
-| `test`  | `cargo test`   | `["--", "--nocapture"]`    |
-| `clippy`| `cargo clippy` | `["--", "-D", "warnings"]` |
+### Cargo
 
-## Build
+Each takes a `project_dir` (crate root) and `arguments` (extra flags). Runs the subcommand
+directly without a shell.
+
+| Tool           | Runs           |
+| -------------- | -------------- |
+| `cargo_fetch`  | `cargo fetch`  |
+| `cargo_build`  | `cargo build`  |
+| `cargo_test`   | `cargo test`   |
+| `cargo_check`  | `cargo check`  |
+| `cargo_clippy` | `cargo clippy` |
+
+### Gradle
+
+Each takes a `project_dir` (project root) and `arguments`. Invokes the project's `gradlew`
+wrapper directly.
+
+| Tool              | Runs              |
+| ----------------- | ----------------- |
+| `gradle_build`    | `gradle build`    |
+| `gradle_test`     | `gradle test`     |
+| `gradle_check`    | `gradle check`    |
+| `gradle_assemble` | `gradle assemble` |
+| `gradle_clean`    | `gradle clean`    |
+
+### Benchmarks
+
+| Tool             | Description                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| `ieee1905_bench` | Runs the `ieee1905` release binary for 5s under `/usr/bin/time -v`; returns the resource-usage report |
+
+### Smart lights
+
+Controls WLED devices discovered on the local network.
+
+| Tool               | Description                                                                  |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `lights_info`      | Returns the available smart lights (id, name, hostname, address)             |
+| `lights_set_color` | Sets a light (by `id`) to an RGB color, each component in the `0.0`–`1.0` range. Run `lights_info` first to populate the device cache |
+
+## Harness config
+
+Use the **HTTP** transport (`http://localhost:9999/mcp`) when the server is already running,
+or the **stdio** transport when you want the harness to spawn the binary itself. For stdio,
+always use an **absolute path** to the binary and pass the `stdio` argument.
+
+### Claude CLI
+
+Add the server with `claude mcp add`:
 
 ```sh
-cargo build --release
+# HTTP (server already running on :9999)
+claude mcp add --transport http mdev http://localhost:9999/mcp
+
+# stdio (CLI spawns the binary)
+claude mcp add mdev /absolute/path/to/mcp-server/target/release/mcp-server stdio
 ```
 
-The binary is produced at `target/release/mcp-server`. It speaks MCP over stdio.
+List or remove it with `claude mcp list` / `claude mcp remove mdev`.
 
-## Zed configuration
+**Permissions.** MCP tools are addressed as `mcp__mdev__<tool>` (or `mcp__mdev` for the whole
+server). Allow or deny them via the `permissions` block in `.claude/settings.json` (or run
+`/permissions` in the CLI):
 
-Zed loads custom MCP servers from its `settings.json` (open with
-`zed: open settings` from the command palette, or edit `~/.config/zed/settings.json`).
-Add the server under `context_servers`:
+```json
+{
+  "permissions": {
+    "allow": ["mcp__mdev__read_file", "mcp__mdev__grep", "mcp__mdev__cargo_build"],
+    "deny": ["mcp__mdev__write_file"]
+  }
+}
+```
+
+Anything not matched falls back to the interactive prompt. Use `mcp__mdev` to cover every
+tool on the server at once. (MCP tool patterns don't support trailing wildcards — list the
+tools, or the server name for all of them.)
+
+### Zed
+
+Zed loads custom MCP servers from its `settings.json` (open with `zed: open settings`, or
+edit `~/.config/zed/settings.json`). Zed spawns the binary, so use the stdio transport:
 
 ```json
 {
   "context_servers": {
-    "cargo-runner": {
+    "mdev": {
       "source": "custom",
       "command": "/absolute/path/to/mcp-server/target/release/mcp-server",
-      "args": [],
+      "args": ["stdio"],
       "env": {}
     }
   }
 }
 ```
 
-Notes:
+Use an **absolute path** for `command`; Zed does not resolve relative paths or `~`.
 
-- Use an **absolute path** for `command`; Zed does not resolve relative paths or `~`.
-- `args` and `env` are optional — the server reads its input from stdin and needs no
-  arguments. Set `env` if you want to point the spawned `cargo` at a specific
-  toolchain or working directory (e.g. `"env": { "RUSTUP_TOOLCHAIN": "stable" }`).
-- `cargo` must be on the `PATH` of the environment Zed launches the server in.
-
-After saving `settings.json`, restart the server from Zed's Agent panel (or reopen the
-project) and the `build`, `check`, `test`, and `clippy` tools become available to the
-agent.
-
-## Agent profiles
-
-Zed's agent uses **profiles** to decide which tools and context servers are exposed in a
-conversation. To make sure the `cargo-runner` tools are turned on, configure
-`agent.profiles` in the same `settings.json`. Each profile lists built-in `tools` and,
-per context server, which of its tools are enabled:
+**Permissions.** Two layers: a profile decides which tools are *visible*, and
+`agent.tool_permissions` decides whether they may *run*. MCP tools are addressed as
+`mcp:mdev:<tool>`:
 
 ```json
 {
   "agent": {
-    "default_profile": "cargo-dev",
     "profiles": {
-      "cargo-dev": {
-        "name": "Cargo Dev",
-        "tools": {
-          "find_path": true,
-          "read_file": true,
-          "grep": true,
-          "diagnostics": true
-        },
+      "default": {
         "enable_all_context_servers": false,
         "context_servers": {
-          "cargo-runner": {
-            "tools": {
-              "build": true,
-              "check": true,
-              "test": true,
-              "clippy": true
-            }
+          "mdev": {
+            "tools": { "read_file": true, "grep": true, "cargo_build": true }
           }
         }
       }
-    }
-  }
-}
-```
-
-Notes:
-
-- The `cargo-runner` key under `context_servers` must match the name you used in the
-  top-level `context_servers` block above.
-- `enable_all_context_servers: true` exposes every context server's tools without
-  listing them individually; set it to `false` (as above) when you want to opt in
-  per-tool.
-- `default_profile` selects which profile new threads start with — you can also switch
-  profiles from the profile selector in the Agent panel.
-- Zed ships built-in `write` and `ask` profiles; defining `cargo-dev` adds to them
-  rather than replacing them.
-
-## Tool permissions
-
-Enabling a tool in a profile only makes it *visible* to the agent — whether it's allowed
-to *run* is governed separately by `agent.tool_permissions`. If the agent reports
-something like **"Blocked by global default: deny"**, your global default is denying the
-call and you need to allow these tools explicitly.
-
-Context-server (MCP) tools are addressed as `mcp:<server>:<tool>`, where `<server>` is the
-`context_servers` key (`cargo-runner` here). Add an `agent.tool_permissions` block to
-`settings.json`:
-
-```json
-{
-  "agent": {
+    },
     "tool_permissions": {
       "default": "confirm",
       "tools": {
-        "mcp:cargo-runner:build": { "default": "allow" },
-        "mcp:cargo-runner:check": { "default": "allow" },
-        "mcp:cargo-runner:test": { "default": "allow" },
-        "mcp:cargo-runner:clippy": { "default": "allow" }
+        "mcp:mdev:read_file": { "default": "allow" },
+        "mcp:mdev:grep": { "default": "allow" },
+        "mcp:mdev:cargo_build": { "default": "allow" }
       }
     }
   }
 }
 ```
 
-Notes:
+Per-tool `default` accepts `"allow"`, `"confirm"`, or `"deny"`, and overrides the global
+`tool_permissions.default`. (Requires Zed v0.224.0 or later.)
 
-- Per-tool `default` accepts `"allow"`, `"confirm"`, or `"deny"`. Use `"allow"` to run
-  without prompting, or `"confirm"` to be asked each time.
-- The per-tool setting overrides the global `tool_permissions.default`, so these four
-  tools run even when the global default is `deny`.
-- MCP tools only support this tool-level `default`; the regex-based `always_allow` /
-  `always_deny` / `always_confirm` rules apply to built-in tools (like `terminal`), not
-  to context-server tools.
-- This setting requires Zed **v0.224.0** or later.
+### opencode
+
+opencode reads MCP servers from `opencode.json` (project root or `~/.config/opencode/`).
+It supports both a `remote` (HTTP) and a `local` (stdio) server type:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mdev": {
+      "type": "remote",
+      "url": "http://localhost:9999/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mdev": {
+      "type": "local",
+      "command": ["/absolute/path/to/mcp-server/target/release/mcp-server", "stdio"],
+      "enabled": true
+    }
+  }
+}
+```
+
+**Permissions.** opencode exposes MCP tools as `<server>_<tool>` (e.g. `mdev_read_file`) and
+gates them with the top-level `permission` block. Each entry is `"allow"`, `"ask"`, or
+`"deny"`, and keys accept glob patterns:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "mdev_*": "ask",
+    "mdev_read_file": "allow",
+    "mdev_grep": "allow",
+    "mdev_write_file": "deny"
+  }
+}
+```
+
+More specific keys win over wildcard patterns, so the example asks for any `mdev` tool by
+default while allowing the read-only ones and denying writes.
