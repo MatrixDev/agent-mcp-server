@@ -264,6 +264,22 @@ impl McpAgentHandler {
         args.0.handle(&context, "clippy").await
     }
 
+    #[tool(description = "Runs `cargo audit` command directly without a terminal shell")]
+    #[instrument(skip_all, "tool/cargo_audit")]
+    async fn cargo_audit(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "audit").await
+    }
+
+    #[tool(description = "Runs `cargo deny` command directly without a terminal shell")]
+    #[instrument(skip_all, "tool/cargo_deny")]
+    async fn cargo_deny(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, "deny").await
+    }
+
     ////////////////////////////////////////////////////////////////////////////////
     // Gradle
     ////////////////////////////////////////////////////////////////////////////////
