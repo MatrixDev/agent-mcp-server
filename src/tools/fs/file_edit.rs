@@ -11,7 +11,7 @@ use crate::permissions::PermissionsGroup;
 pub struct FileEditTool {
     /// path to file being modified
     path: String,
-    /// replace starting from this line
+    /// replace starting from this 0-based line
     start_line: usize,
     /// replace this amount of lines, zero inserts without removing any
     lines_count: usize,
