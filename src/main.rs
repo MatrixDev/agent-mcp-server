@@ -6,7 +6,7 @@ mod tools;
 use std::sync::{Arc, OnceLock};
 
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{InitializeRequestParams, InitializeResult};
+use rmcp::model::{Content, InitializeRequestParams, InitializeResult};
 use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::StreamableHttpService;
@@ -20,6 +20,7 @@ use tools::fs::directory_make::DirectoryMakeTool;
 use tools::fs::file_edit::FileEditTool;
 use tools::fs::file_move::FileMoveTool;
 use tools::fs::file_read::FileReadTool;
+use tools::fs::file_read_image::FileReadImageTool;
 use tools::fs::file_write::FileWriteTool;
 use tools::fs::glob::GlobTool;
 use tools::fs::grep::GrepTool;
@@ -146,6 +147,14 @@ impl McpAgentHandler {
     #[tool(description = "Read a file, returns content range with numbered lines")]
     #[instrument(skip_all, "tool/read_file")]
     pub async fn read_file(&self, args: Parameters<FileReadTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(description = "Read an image file and return it as base64-encoded image content")]
+    #[instrument(skip_all, "tool/read_image")]
+    pub async fn read_image(&self, args: Parameters<FileReadImageTool>) -> Result<Content, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
         args.0.handle(&context).await

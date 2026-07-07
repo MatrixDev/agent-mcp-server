@@ -23,6 +23,7 @@ impl Ieee1905BenchTool {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .kill_on_drop(true)
             .status()
             .await
             .map_err(|e| {
@@ -34,6 +35,7 @@ impl Ieee1905BenchTool {
         let output = Command::new("limactl")
             .args(["shell", "default", "sudo", "timeout", "10s", SCRIPT])
             .stdin(Stdio::null())
+            .kill_on_drop(true)
             .output()
             .await
             .map_err(|e| {

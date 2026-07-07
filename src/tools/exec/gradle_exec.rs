@@ -26,6 +26,7 @@ impl GradleRunTool {
             .arg(task)
             .args(&self.arguments)
             .current_dir(project_dir)
+            .kill_on_drop(true)
             .output()
             .await
             .map_err(|e| {
