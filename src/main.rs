@@ -233,60 +233,16 @@ impl McpAgentHandler {
     // Cargo
     ////////////////////////////////////////////////////////////////////////////////
 
-    #[tool(description = "Runs `cargo fetch` command directly without a terminal shell")]
-    #[instrument(skip_all, "tool/cargo_fetch")]
-    async fn cargo_fetch(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
+    #[tool(description = "Runs `cargo` command directly without a terminal shell")]
+    #[instrument(skip_all, "tool/cargo")]
+    async fn cargo(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<CargoRunTool>,
+    ) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
-        args.0.handle(&context, "fetch").await
-    }
-
-    #[tool(description = "Runs `cargo build` command directly without a terminal shell")]
-    #[instrument(skip_all, "tool/cargo_build")]
-    async fn cargo_build(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, "build").await
-    }
-
-    #[tool(description = "Runs `cargo test` command directly without a terminal shell")]
-    #[instrument(skip_all, "tool/cargo_test")]
-    async fn cargo_test(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, "test").await
-    }
-
-    #[tool(description = "Runs `cargo check` command directly without a terminal shell")]
-    #[instrument(skip_all, "tool/cargo_check")]
-    async fn cargo_check(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, "check").await
-    }
-
-    #[tool(description = "Runs `cargo clippy` command directly without a terminal shell")]
-    #[instrument(skip_all, "tool/cargo_clippy")]
-    async fn cargo_clippy(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, "clippy").await
-    }
-
-    #[tool(description = "Runs `cargo audit` command directly without a terminal shell")]
-    #[instrument(skip_all, "tool/cargo_audit")]
-    async fn cargo_audit(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, "audit").await
-    }
-
-    #[tool(description = "Runs `cargo deny` command directly without a terminal shell")]
-    #[instrument(skip_all, "tool/cargo_deny")]
-    async fn cargo_deny(&self, args: Parameters<CargoRunTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, "deny").await
+        args.0.handle(&context, &request).await
     }
 
     ////////////////////////////////////////////////////////////////////////////////

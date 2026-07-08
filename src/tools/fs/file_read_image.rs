@@ -31,12 +31,12 @@ impl FileReadImageTool {
         })?;
 
         // Reject oversized images by their metadata before pulling any bytes into memory.
-        if let Ok(metadata) = tokio::fs::metadata(&path).await {
-            if metadata.len() > MAX_IMAGE_BYTES {
-                let message = format!("image is too large: {} bytes (max {MAX_IMAGE_BYTES})", metadata.len());
-                error!("{message}");
-                return Err(ErrorData::invalid_request(message, None));
-            }
+        if let Ok(metadata) = tokio::fs::metadata(&path).await
+            && metadata.len() > MAX_IMAGE_BYTES
+        {
+            let message = format!("image is too large: {} bytes (max {MAX_IMAGE_BYTES})", metadata.len());
+            error!("{message}");
+            return Err(ErrorData::invalid_request(message, None));
         }
 
         let Ok(bytes) = tokio::fs::read(&path).await else {
