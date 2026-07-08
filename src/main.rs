@@ -13,8 +13,8 @@ use rmcp::transport::streamable_http_server::StreamableHttpService;
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::{tool, tool_handler, tool_router, ErrorData, RoleServer, ServerHandler, ServiceExt};
 use tokio::sync::Mutex;
-use tools::exec::cargo_exec::CargoRunTool;
-use tools::exec::gradle_exec::GradleRunTool;
+use tools::exec::cargo::CargoRunTool;
+use tools::exec::gradle::GradleRunTool;
 use tools::fs::directory_list::DirectoryListTool;
 use tools::fs::directory_make::DirectoryMakeTool;
 use tools::fs::file_edit::FileEditTool;
@@ -249,44 +249,16 @@ impl McpAgentHandler {
     // Gradle
     ////////////////////////////////////////////////////////////////////////////////
 
-    #[tool(description = "Runs `gradle build` task directly without a terminal shell")]
-    #[instrument(skip_all, "tool/gradle_build")]
-    async fn gradle_build(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
+    #[tool(description = "Runs `gradle` task directly without a terminal shell")]
+    #[instrument(skip_all, "tool/gradle")]
+    async fn gradle(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<GradleRunTool>,
+    ) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
-        args.0.handle(&context, "build").await
-    }
-
-    #[tool(description = "Runs `gradle test` task directly without a terminal shell")]
-    #[instrument(skip_all, "tool/gradle_test")]
-    async fn gradle_test(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, "test").await
-    }
-
-    #[tool(description = "Runs `gradle check` task directly without a terminal shell")]
-    #[instrument(skip_all, "tool/gradle_check")]
-    async fn gradle_check(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, "check").await
-    }
-
-    #[tool(description = "Runs `gradle assemble` task directly without a terminal shell")]
-    #[instrument(skip_all, "tool/gradle_assemble")]
-    async fn gradle_assemble(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, "assemble").await
-    }
-
-    #[tool(description = "Runs `gradle clean` task directly without a terminal shell")]
-    #[instrument(skip_all, "tool/gradle_clean")]
-    async fn gradle_clean(&self, args: Parameters<GradleRunTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, "clean").await
+        args.0.handle(&context, &request).await
     }
 
     ////////////////////////////////////////////////////////////////////////////////
