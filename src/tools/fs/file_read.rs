@@ -35,7 +35,7 @@ impl FileReadTool {
             .enumerate()
             .skip(self.offset.unwrap_or(0))
             .take(self.limit.map_or(usize::MAX, NonZeroUsize::get))
-            .map(|(index, line)| format!("{:>6} {line}", index + 1))
+            .map(|(index, line)| format!("{index:>6} {line}"))
             .collect::<String>();
 
         Ok(result)
