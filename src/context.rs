@@ -132,7 +132,7 @@ impl McpAgentContext {
         }
 
         // fs read allow
-        for path in ["./", "/Users/matrixdev/.cargo/"] {
+        for path in ["./", "/Users/matrixdev/.cargo/", "/Users/matrixdev/.claude/"] {
             permissions
                 .register_fs_entry(PermissionsGroup::FsRead, PermissionsKind::Allow, path)
                 .await?;
