@@ -18,7 +18,7 @@ impl DirectoryMakeTool {
         let path = context.resolve_path(&self.path).await?;
         context.check_permissions(PermissionsGroup::FsWrite, &path).await?;
 
-        if tokio::fs::create_dir_all(&self.path).await.is_err() {
+        if tokio::fs::create_dir_all(&path).await.is_err() {
             let message = format!("failed to create a directory: {}", self.path);
             error!("{message}");
             return Err(ErrorData::invalid_request(message, None));
