@@ -1,9 +1,11 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
+use glob::MatchOptions;
 use rmcp::schemars::{self, JsonSchema};
 use rmcp::ErrorData;
 use serde::Deserialize;
+use tracing::error;
 
 use crate::context::McpAgentContext;
 use crate::permissions::PermissionsGroup;
@@ -31,7 +33,7 @@ impl GlobTool {
         context.check_permissions(PermissionsGroup::FsRead, &path).await?;
 
         let mut results = Vec::new();
-        for file in Self::collect(&path, Some(&self.pattern)).await {
+        for file in Self::collect(&path, Some(&self.pattern)).await? {
             let display = file.strip_prefix(&workspace).unwrap_or(&file);
             results.push(display.to_string_lossy().into_owned());
         }
@@ -50,15 +52,31 @@ impl GlobTool {
         Ok(output)
     }
 
-    pub async fn collect(path: &Path, pattern: Option<&str>) -> Vec<PathBuf> {
+    ////////////////////////////////////////////////////////////////////////////////
+    pub async fn collect(path: &Path, pattern: Option<&str>) -> Result<Vec<PathBuf>, ErrorData> {
+        const MATCH_OPTIONS: MatchOptions = MatchOptions {
+            case_sensitive: true,
+            require_literal_separator: true,
+            require_literal_leading_dot: false,
+        };
+
+        let pattern = match pattern {
+            Some(e) => Some(glob::Pattern::new(e).map_err(|e| {
+                let message = format!("invalid pattern: {e}");
+                error!("{message}");
+                ErrorData::invalid_request(message, None)
+            })?),
+            None => None,
+        };
+
         let mut files = collect_files(path).await;
         if let Some(pattern) = pattern {
             files.retain(|file| {
                 let file = file.strip_prefix(path).unwrap_or(&file);
-                glob_match(pattern.as_bytes(), file.to_string_lossy().as_bytes())
+                pattern.matches_path_with(file, MATCH_OPTIONS)
             });
         }
-        files
+        Ok(files)
     }
 }
 
@@ -99,66 +117,4 @@ async fn collect_files(root: &Path) -> Vec<PathBuf> {
         }
     }
     files
-}
-
-///
-/// Match a `/`-separated path against a glob pattern.
-///
-/// - `?` matches a single character except `/`
-/// - `*` matches any run of characters within one path segment (not `/`)
-/// - `**` matches any run of characters across segments (including `/`); a
-///   trailing slash (`**/`) also matches zero directories
-///
-fn glob_match(pattern: &[u8], text: &[u8]) -> bool {
-    match pattern.split_first() {
-        None => text.is_empty(),
-        Some((&b'*', rest)) if rest.first() == Some(&b'*') => {
-            let mut after = &rest[1..];
-            if after.first() == Some(&b'/') {
-                after = &after[1..];
-            }
-            (0..=text.len()).any(|i| glob_match(after, &text[i..]))
-        }
-        Some((&b'*', rest)) => {
-            let segment_end = text.iter().position(|&c| c == b'/').unwrap_or(text.len());
-            (0..=segment_end).any(|i| glob_match(rest, &text[i..]))
-        }
-        Some((&b'?', rest)) => matches!(text.first(), Some(&c) if c != b'/') && glob_match(rest, &text[1..]),
-        Some((&c, rest)) => text.first() == Some(&c) && glob_match(rest, &text[1..]),
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-#[cfg(test)]
-mod tests {
-    use super::glob_match;
-
-    fn matches(pattern: &str, path: &str) -> bool {
-        glob_match(pattern.as_bytes(), path.as_bytes())
-    }
-
-    #[test]
-    fn single_star_stays_within_a_segment() {
-        assert!(matches("*.rs", "main.rs"));
-        assert!(!matches("*.rs", "src/main.rs"));
-        assert!(matches("src/*.toml", "src/x.toml"));
-        assert!(!matches("src/*.toml", "src/a/x.toml"));
-    }
-
-    #[test]
-    fn double_star_crosses_segments() {
-        assert!(matches("**/*.rs", "main.rs"));
-        assert!(matches("**/*.rs", "src/a/b.rs"));
-        assert!(matches("src/**/*.rs", "src/b.rs"));
-        assert!(matches("src/**/*.rs", "src/a/b.rs"));
-        assert!(!matches("src/**/*.rs", "tests/a.rs"));
-    }
-
-    #[test]
-    fn question_mark_and_literals() {
-        assert!(matches("?.rs", "a.rs"));
-        assert!(!matches("?.rs", "ab.rs"));
-        assert!(matches("Cargo.toml", "Cargo.toml"));
-        assert!(!matches("Cargo.toml", "Cargo.lock"));
-    }
 }

@@ -47,7 +47,7 @@ impl GrepTool {
         context.check_permissions(PermissionsGroup::FsRead, &root).await?;
 
         let query = Self::build_query_regex(&self.query, self.ignore_case.unwrap_or(false))?;
-        let files = GlobTool::collect(&root, self.include.as_deref()).await;
+        let files = GlobTool::collect(&root, self.include.as_deref()).await?;
 
         let mut results = Vec::new();
         for file in files {
