@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use rmcp::schemars::{self, JsonSchema};
 use rmcp::ErrorData;
 use serde::Deserialize;
@@ -11,8 +13,8 @@ use crate::permissions::PermissionsGroup;
 pub struct FileEditTool {
     /// path to file being modified
     path: String,
-    /// replace starting from this 0-based line
-    start_line: usize,
+    /// replace starting from this 1-based line
+    start_line: NonZeroUsize,
     /// replace this amount of lines, zero inserts without removing any
     lines_count: usize,
     /// text inserted in place of the removed lines
@@ -33,7 +35,7 @@ impl FileEditTool {
         let mut lines = contents.split_inclusive('\n');
         let mut buffer = String::new();
 
-        buffer.extend(lines.by_ref().take(self.start_line));
+        buffer.extend(lines.by_ref().take(self.start_line.get() - 1));
         buffer.push_str(&self.new_text);
         if !self.new_text.is_empty() && !self.new_text.ends_with('\n') {
             buffer.push('\n');

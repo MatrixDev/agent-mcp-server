@@ -13,8 +13,8 @@ use crate::permissions::PermissionsGroup;
 pub struct FileReadTool {
     /// path to file being read
     path: String,
-    /// 0-based line number to start at (lines, not bytes). Defaults to the start of the file.
-    offset: Option<usize>,
+    /// 1-based line number to start at (lines, not bytes). Defaults to the start of the file.
+    offset: Option<NonZeroUsize>,
     /// Maximum number of lines to return (lines, not bytes). Defaults to the whole file.
     limit: Option<NonZeroUsize>,
 }
@@ -33,7 +33,7 @@ impl FileReadTool {
         let result = contents
             .split_inclusive('\n')
             .enumerate()
-            .skip(self.offset.unwrap_or(0))
+            .skip(self.offset.map_or(0, |e| e.get() - 1))
             .take(self.limit.map_or(usize::MAX, NonZeroUsize::get))
             .map(|(index, line)| format!("{index:>6} {line}"))
             .collect::<String>();
