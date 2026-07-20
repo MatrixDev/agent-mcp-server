@@ -3,6 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
+use glob::MatchOptions;
 
 use crate::path_resolver::PathResolver;
 
@@ -10,7 +11,7 @@ use crate::path_resolver::PathResolver;
 #[derive(Debug)]
 pub struct Permissions {
     path_resolver: PathResolver,
-    fs: HashMap<PermissionsPair, Vec<PathBuf>>,
+    fs: HashMap<PermissionsPair, Vec<glob::Pattern>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -43,28 +44,58 @@ impl Permissions {
         kind: PermissionsKind,
         path: impl AsRef<Path>,
     ) -> anyhow::Result<()> {
-        let path = self.path_resolver.resolve(path).await?;
-        self.fs.entry(PermissionsPair(group, kind)).or_default().push(path);
+        let (prefix, suffix) = Self::split_on_first_wildcard(path);
+        let resolved = self.path_resolver.resolve(prefix).await?;
+        let path = if suffix.as_os_str().is_empty() {
+            resolved
+        } else {
+            resolved.join(suffix)
+        };
+        let pattern = glob::Pattern::new(path.to_string_lossy().as_ref())?;
+        self.fs.entry(PermissionsPair(group, kind)).or_default().push(pattern);
         Ok(())
     }
 
     ////////////////////////////////////////////////////////////////////////////////
     pub async fn check(&self, group: PermissionsGroup, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        const MATCH_OPTIONS: MatchOptions = MatchOptions {
+            case_sensitive: true,
+            require_literal_separator: true,
+            require_literal_leading_dot: false,
+        };
+
         let path = self.path_resolver.resolve(path).await?;
 
         if let Some(entries) = self.fs.get(&PermissionsPair(group, PermissionsKind::Deny)) {
-            if entries.iter().any(|e| path.starts_with(e)) {
+            if entries.iter().any(|e| e.matches_path_with(&path, MATCH_OPTIONS)) {
                 return Err(anyhow!("permission to file {path:?} is denied"));
             }
         }
 
         if let Some(entries) = self.fs.get(&PermissionsPair(group, PermissionsKind::Allow)) {
-            if entries.iter().any(|e| path.starts_with(e)) {
+            if entries.iter().any(|e| e.matches_path_with(&path, MATCH_OPTIONS)) {
                 return Ok(());
             }
         }
 
         Err(anyhow!("permission to file {path:?} was not granted"))
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    fn split_on_first_wildcard(raw: impl AsRef<Path>) -> (PathBuf, PathBuf) {
+        let (mut base, mut tail) = (PathBuf::new(), PathBuf::new());
+
+        let mut components = raw.as_ref().components();
+        while let Some(component) = components.next() {
+            if component.as_os_str().to_string_lossy().contains(['*', '?', '[']) {
+                tail.push(component);
+                break;
+            }
+            base.push(component);
+        }
+        tail.extend(components);
+
+        (base, tail)
     }
 }
 

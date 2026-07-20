@@ -125,28 +125,28 @@ impl McpAgentContext {
         let mut permissions = Permissions::new(path_resolver.clone());
 
         // fs read deny
-        for path in [".git/"] {
+        for path in ["./**/.git", "./**/.git/**"] {
             permissions
                 .register_fs_entry(PermissionsGroup::FsRead, PermissionsKind::Deny, path)
                 .await?;
         }
 
         // fs read allow
-        for path in ["./", "/Users/matrixdev/.cargo/", "/Users/matrixdev/.claude/"] {
+        for path in [".", "./**", "~/.cargo/**", "~/.claude/**"] {
             permissions
                 .register_fs_entry(PermissionsGroup::FsRead, PermissionsKind::Allow, path)
                 .await?;
         }
 
         // fs write deny
-        for path in [".git/"] {
+        for path in ["./**/.git", "./**/.git/**"] {
             permissions
                 .register_fs_entry(PermissionsGroup::FsWrite, PermissionsKind::Deny, path)
                 .await?;
         }
 
         // fs write allow
-        for path in ["./"] {
+        for path in ["./**"] {
             permissions
                 .register_fs_entry(PermissionsGroup::FsWrite, PermissionsKind::Allow, path)
                 .await?;
