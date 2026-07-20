@@ -13,6 +13,24 @@ Build it with `cargo build --release`; the binary is produced at `target/release
 
 ## Tools
 
+### Working directory
+
+Every tool resolves paths against a single **workspace root**, which also anchors the
+permission filter. Relative paths are joined to it, `~` expands to the home directory, and
+absolute paths are used as-is; symlinks are then resolved.
+
+The server picks the root per connection, in this order:
+
+1. **`x-mcp-workspace-root` HTTP header** — if present on the request, its (canonicalized)
+   value is used. This is the preferred mechanism for the HTTP transport; set it to the
+   project directory the agent is working in.
+2. **MCP `roots/list`** — if the header is missing or invalid, the server calls back to the
+   client (`roots/list`) and uses the first `file://` root it advertises.
+
+Over **stdio** there is no HTTP header, so the client must advertise a root via `roots/list`.
+If neither a header nor a usable root is available, path resolution fails and the tools
+cannot run.
+
 ### File system
 
 Access is gated by a path-permission filter: reads/writes are confined to the workspace
