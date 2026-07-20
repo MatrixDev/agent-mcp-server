@@ -15,48 +15,37 @@ Build it with `cargo build --release`; the binary is produced at `target/release
 
 ### File system
 
-| Tool             | Description                                                |
-| ---------------- | ---------------------------------------------------------- |
-| `read_file`      | Read a file, returning the content range with line numbers |
-| `write_file`     | Write a file, overwriting any existing contents            |
-| `edit_file`      | Replace a range of lines in a file with new text           |
-| `move_file`      | Move or rename a file or directory                         |
-| `list_directory` | List the entries of a directory                            |
-| `make_directory` | Create a directory, including parents                      |
-| `glob`           | Find files by glob pattern, e.g. `**/*.rs`                 |
-| `grep`           | Search file contents with a regular expression             |
+Access is gated by a path-permission filter: reads/writes are confined to the workspace
+(plus a few allowlisted roots), and `.git` is denied.
 
-### Cargo
+| Tool             | Description                                                                     |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `read_file`      | Read a file as text with **1-based** numbered lines; optional `offset`/`limit`  |
+| `read_image`     | Read an image file, returned as base64-encoded image content (≤ 10 MiB)         |
+| `write_file`     | Write a file, overwriting any existing contents                                 |
+| `edit_file`      | Replace `lines_count` lines from **1-based** `start_line` with new text (`lines_count: 0` inserts) |
+| `move_file`      | Move or rename a file or directory                                              |
+| `list_directory` | List the entries of a directory                                                 |
+| `make_directory` | Create a directory, including parents                                           |
+| `glob`           | Find files by glob pattern (`*` stays within a segment, `**` crosses directories), e.g. `**/*.rs` |
+| `grep`           | Search file contents with a regular expression; returns `path:line:text`        |
 
-Each takes a `project_dir` (crate root) and `arguments` (extra flags). Runs the subcommand
-directly without a shell.
+### Build
 
-| Tool           | Runs           |
-| -------------- | -------------- |
-| `cargo_fetch`  | `cargo fetch`  |
-| `cargo_build`  | `cargo build`  |
-| `cargo_test`   | `cargo test`   |
-| `cargo_check`  | `cargo check`  |
-| `cargo_clippy` | `cargo clippy` |
+Each takes a `project_dir` (project root) and `arguments` — the **full** argument list,
+*including the subcommand/task as the first element*. Commands run directly without a shell,
+and their output is **streamed** back via MCP progress notifications as it is produced.
 
-### Gradle
-
-Each takes a `project_dir` (project root) and `arguments`. Invokes the project's `gradlew`
-wrapper directly.
-
-| Tool              | Runs              |
-| ----------------- | ----------------- |
-| `gradle_build`    | `gradle build`    |
-| `gradle_test`     | `gradle test`     |
-| `gradle_check`    | `gradle check`    |
-| `gradle_assemble` | `gradle assemble` |
-| `gradle_clean`    | `gradle clean`    |
+| Tool     | Runs                    | Example `arguments`                                       |
+| -------- | ----------------------- | -------------------------------------------------------- |
+| `cargo`  | `cargo …`               | `["build", "--release"]`, `["test", "--", "--nocapture"]` |
+| `gradle` | `./gradlew …` (wrapper) | `["build"]`, `["test", "--info"]`                        |
 
 ### Benchmarks
 
 | Tool             | Description                                                                        |
 | ---------------- | ---------------------------------------------------------------------------------- |
-| `ieee1905_bench` | Runs the `ieee1905` release binary for 5s under `/usr/bin/time -v`; returns the resource-usage report |
+| `ieee1905_bench` | Runs the `ieee1905` release binary under a timeout and returns its resource-usage report |
 
 ### Smart lights
 
