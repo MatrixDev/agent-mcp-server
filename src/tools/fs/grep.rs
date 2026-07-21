@@ -43,7 +43,7 @@ impl GrepTool {
     ////////////////////////////////////////////////////////////////////////////////
     pub async fn handle_internal(self, context: &McpAgentContext) -> Result<String, ErrorData> {
         let root = context.resolve_path(self.path.as_deref().unwrap_or(".")).await?;
-        let workspace = context.resolve_path("../../..").await?;
+        let workspace = context.resolve_path(".").await?;
         context.check_permissions(PermissionsGroup::FsRead, &root).await?;
 
         let query = Self::build_query_regex(&self.query, self.ignore_case.unwrap_or(false))?;

@@ -6,7 +6,7 @@ use rmcp::{ErrorData, RoleServer};
 use serde::Deserialize;
 
 use crate::context::McpAgentContext;
-use crate::tools::exec::execute_command;
+use crate::helpers::steam_command::SteamCommand;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -26,6 +26,10 @@ impl GradleRunTool {
         let project_dir = context.resolve_path(&self.project_dir).await?;
         let program = project_dir.join("gradlew");
 
-        execute_command(request, program, self.arguments, project_dir).await
+        SteamCommand::new(request, program)
+            .args(self.arguments)
+            .current_dir(project_dir)
+            .execute()
+            .await
     }
 }

@@ -1,4 +1,5 @@
 mod context;
+mod helpers;
 mod path_resolver;
 mod permissions;
 mod tools;
@@ -26,13 +27,14 @@ use tools::fs::glob::GlobTool;
 use tools::fs::grep::GrepTool;
 use tools::lights::lights_info::LightsInfoTool;
 use tools::lights::lights_set_color::LightsSetColorTool;
+use tools::other::ieee1905_bench::Ieee1905BenchTool;
+use tools::other::ssh_bpi_r4::SshBpiR4Tool;
 use tracing::{error, info, instrument};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::context::McpAgentContext;
-use crate::tools::ieee1905_bench::Ieee1905BenchTool;
 use crate::tools::lights::controller::LightsController;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -217,19 +219,6 @@ impl McpAgentHandler {
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    // Benchmarks
-    ////////////////////////////////////////////////////////////////////////////////
-
-    #[tool(
-        description = "Run the ieee1905 release binary for 5s under `/usr/bin/time -v` and return its resource-usage report"
-    )]
-    #[instrument(skip_all, "tool/ieee1905_bench")]
-    pub async fn ieee1905_bench(&self, args: Parameters<Ieee1905BenchTool>) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        args.0.handle().await
-    }
-
-    ////////////////////////////////////////////////////////////////////////////////
     // Cargo
     ////////////////////////////////////////////////////////////////////////////////
 
@@ -279,5 +268,33 @@ impl McpAgentHandler {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
         args.0.handle(&context).await
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Other
+    ////////////////////////////////////////////////////////////////////////////////
+
+    #[tool(description = "Run ieee1905 release binary for few seconds and return its resource-usage report")]
+    #[instrument(skip_all, "tool/ieee1905_bench")]
+    pub async fn ieee1905_bench(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<Ieee1905BenchTool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, &request).await
+    }
+
+    #[tool(description = "Run ssh command on the remote BPI-R4 device")]
+    #[instrument(skip_all, "tool/bpi_r4_ssh")]
+    pub async fn bpi_r4_ssh(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<SshBpiR4Tool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, &request).await
     }
 }

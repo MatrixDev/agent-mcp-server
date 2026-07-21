@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use rmcp::schemars::{self, JsonSchema};
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer};
@@ -8,25 +6,24 @@ use serde::Deserialize;
 use crate::context::McpAgentContext;
 use crate::helpers::steam_command::SteamCommand;
 
+////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct CargoRunTool {
-    /// cargo project root directory
-    project_dir: PathBuf,
-    /// extra arguments added to cargo subcommand
-    arguments: Vec<String>,
+pub struct SshBpiR4Tool {
+    /// bash command to run the device
+    command: String,
 }
 
-impl CargoRunTool {
+impl SshBpiR4Tool {
     pub async fn handle(
         self,
         context: &McpAgentContext,
         request: &RequestContext<RoleServer>,
     ) -> Result<String, ErrorData> {
-        let project_dir = context.resolve_path(&self.project_dir).await?;
+        let current_dir = context.resolve_path(".").await?;
 
-        SteamCommand::new(request, "cargo")
-            .args(self.arguments)
-            .current_dir(project_dir)
+        SteamCommand::new(request, "ssh")
+            .args(["root@10.0.0.1", self.command.as_str()])
+            .current_dir(current_dir)
             .execute()
             .await
     }
