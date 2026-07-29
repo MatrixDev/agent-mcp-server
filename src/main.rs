@@ -9,10 +9,10 @@ use std::sync::{Arc, OnceLock};
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{Content, InitializeRequestParams, InitializeResult};
 use rmcp::service::RequestContext;
-use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
-use rmcp::transport::streamable_http_server::StreamableHttpService;
 use rmcp::transport::StreamableHttpServerConfig;
-use rmcp::{tool, tool_handler, tool_router, ErrorData, RoleServer, ServerHandler, ServiceExt};
+use rmcp::transport::streamable_http_server::StreamableHttpService;
+use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
+use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt, tool, tool_handler, tool_router};
 use tokio::sync::Mutex;
 use tools::exec::cargo::CargoRunTool;
 use tools::exec::gradle::GradleRunTool;
@@ -21,7 +21,7 @@ use tools::fs::directory_make::DirectoryMakeTool;
 use tools::fs::file_edit::FileEditTool;
 use tools::fs::file_move::FileMoveTool;
 use tools::fs::file_read::FileReadTool;
-use tools::fs::file_read_image::FileReadImageTool;
+use tools::fs::file_read_raw::FileReadRawTool;
 use tools::fs::file_write::FileWriteTool;
 use tools::fs::glob::GlobTool;
 use tools::fs::grep::GrepTool;
@@ -154,9 +154,9 @@ impl McpAgentHandler {
         args.0.handle(&context).await
     }
 
-    #[tool(description = "Read an image file and return it as base64-encoded image content")]
-    #[instrument(skip_all, "tool/read_image")]
-    pub async fn read_image(&self, args: Parameters<FileReadImageTool>) -> Result<Content, ErrorData> {
+    #[tool(description = "Read any binary file (image, audio, blob) and return it base64-encoded with its mime type")]
+    #[instrument(skip_all, "tool/read_file_raw")]
+    pub async fn read_raw(&self, args: Parameters<FileReadRawTool>) -> Result<Content, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
         args.0.handle(&context).await

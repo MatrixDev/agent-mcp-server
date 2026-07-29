@@ -39,7 +39,7 @@ Access is gated by a path-permission filter: reads/writes are confined to the wo
 | Tool             | Description                                                                     |
 | ---------------- | ------------------------------------------------------------------------------- |
 | `read_file`      | Read a file as text with **1-based** numbered lines; optional `offset`/`limit`  |
-| `read_image`     | Read an image file, returned as base64-encoded image content (≤ 10 MiB)         |
+| `read_raw`       | Read any binary file (≤ 10 MiB). Images are returned as image content, audio as audio content, everything else as a base64-encoded blob resource; the mime type comes from the extension, falling back to magic-byte sniffing |
 | `write_file`     | Write a file, overwriting any existing contents                                 |
 | `edit_file`      | Replace `lines_count` lines from **1-based** `start_line` with new text (`lines_count: 0` inserts) |
 | `move_file`      | Move or rename a file or directory                                              |
