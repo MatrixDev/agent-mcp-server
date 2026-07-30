@@ -27,8 +27,8 @@ use tools::fs::glob::GlobTool;
 use tools::fs::grep::GrepTool;
 use tools::lights::lights_info::LightsInfoTool;
 use tools::lights::lights_set_color::LightsSetColorTool;
+use tools::other::bpi_r4_ssh::BpiR4SshTool;
 use tools::other::ieee1905_bench::Ieee1905BenchTool;
-use tools::other::ssh_bpi_r4::SshBpiR4Tool;
 use tracing::{error, info, instrument};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
@@ -36,6 +36,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::context::McpAgentContext;
 use crate::tools::lights::controller::LightsController;
+use crate::tools::other::bpi_r4_scp::BpiR4ScpTool;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[tokio::main]
@@ -291,7 +292,19 @@ impl McpAgentHandler {
     pub async fn bpi_r4_ssh(
         &self,
         request: RequestContext<RoleServer>,
-        args: Parameters<SshBpiR4Tool>,
+        args: Parameters<BpiR4SshTool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, &request).await
+    }
+
+    #[tool(description = "Run scp command to copy local files to the remote BPI-R4 device")]
+    #[instrument(skip_all, "tool/bpi_r4_scp")]
+    pub async fn bpi_r4_scp(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<BpiR4ScpTool>,
     ) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
