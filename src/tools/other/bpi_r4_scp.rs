@@ -1,3 +1,5 @@
+use std::ffi::OsStr;
+
 use rmcp::schemars::{self, JsonSchema};
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer};
@@ -5,6 +7,7 @@ use serde::Deserialize;
 
 use crate::context::McpAgentContext;
 use crate::helpers::steam_command::SteamCommand;
+use crate::permissions::PermissionsGroup;
 use crate::tools::other::BPI_R4_DESTINATION;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -23,10 +26,13 @@ impl BpiR4ScpTool {
         request: &RequestContext<RoleServer>,
     ) -> Result<String, ErrorData> {
         let current_dir = context.resolve_path(".").await?;
+        let source = context.resolve_path(self.local_path).await?;
         let target = format!("{BPI_R4_DESTINATION}:{}", self.remote_path);
 
+        context.check_permissions(PermissionsGroup::FsRead, &source).await?;
+
         SteamCommand::new(request, "scp")
-            .args(["-O", self.local_path.as_str(), target.as_str()])
+            .args([OsStr::new("-O"), source.as_ref(), target.as_ref()])
             .current_dir(current_dir)
             .execute()
             .await
