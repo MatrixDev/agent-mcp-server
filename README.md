@@ -61,9 +61,12 @@ and their output is **streamed** back via MCP progress notifications as it is pr
 
 ### Git
 
-| Tool       | Description                                                                            |
-| ---------- | -------------------------------------------------------------------------------------- |
-| `git_diff` | Runs `git diff HEAD~<commit_depth> [-- <paths>]` in `folder`. `commit_depth` defaults to `0`, i.e. uncommitted changes to tracked files; higher values also fold in the last N commits. `paths` are git pathspecs relative to `folder`, eg `["src"]` or `[":(exclude)Cargo.lock"]` |
+| Tool       | Runs         | Example `arguments`                                  |
+| ---------- | ------------ | ---------------------------------------------------- |
+| `git_diff` | `git diff …` | `["--stat"]`, `["HEAD~1"]`, `["--", "src"]`, `[":(exclude)Cargo.lock"]` |
+
+`folder` is any directory inside the git repository — it selects the repository when several are
+present. `arguments` are appended verbatim after the subcommand; only `diff` is exposed for now.
 
 ### Benchmarks
 

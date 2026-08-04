@@ -1,3 +1,3 @@
 pub mod cargo;
-pub mod git_diff;
+pub mod git;
 pub mod gradle;
