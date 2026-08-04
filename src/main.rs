@@ -4,8 +4,10 @@ mod path_resolver;
 mod permissions;
 mod tools;
 
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, OnceLock};
 
+use clap::{Parser, Subcommand};
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{Content, InitializeRequestParams, InitializeResult};
 use rmcp::service::RequestContext;
@@ -40,17 +42,49 @@ use crate::tools::other::bpi_r4_ssh::BpiR4SshTool;
 use crate::tools::other::ieee1905_bench::Ieee1905BenchTool;
 
 ////////////////////////////////////////////////////////////////////////////////
+const DEFAULT_ADDRESS: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+const DEFAULT_PORT: u16 = 9999;
+
+////////////////////////////////////////////////////////////////////////////////
+#[derive(Debug, Parser)]
+#[command(version, about = "MDev MCP server")]
+struct Arguments {
+    #[command(subcommand)]
+    transport: Option<Transport>,
+}
+
+////////////////////////////////////////////////////////////////////////////////
+#[derive(Debug, Subcommand)]
+enum Transport {
+    /// Serve over stdio, for clients that spawn the binary themselves
+    Stdio,
+    /// Serve streamable HTTP at /mcp, used when no subcommand is given
+    Http {
+        /// port to bind the listener to
+        #[arg(short, long, default_value_t = DEFAULT_PORT)]
+        port: u16,
+    },
+}
+
+impl Default for Transport {
+    fn default() -> Self {
+        Self::Http { port: DEFAULT_PORT }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let arguments = Arguments::parse();
+
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::layer().with_span_events(FmtSpan::CLOSE))
         .init();
 
-    if std::env::args().nth(1).as_deref() == Some("stdio") {
-        serve_stdio().await?;
-    } else {
-        serve_http().await?;
+    match arguments.transport.unwrap_or_default() {
+        Transport::Stdio => serve_stdio().await?,
+        Transport::Http { port } => serve_http(SocketAddr::new(DEFAULT_ADDRESS, port)).await?,
     }
     Ok(())
 }
@@ -68,7 +102,7 @@ async fn serve_stdio() -> anyhow::Result<()> {
 
 ////////////////////////////////////////////////////////////////////////////////
 #[instrument(skip_all, "serve_http")]
-async fn serve_http() -> anyhow::Result<()> {
+async fn serve_http(listen: SocketAddr) -> anyhow::Result<()> {
     let lights = LightsController::new()?;
     let service = StreamableHttpService::new(
         move || McpAgentHandler::new(lights.clone()),
@@ -77,9 +111,9 @@ async fn serve_http() -> anyhow::Result<()> {
     );
 
     let router = axum::Router::new().nest_service("/mcp", service);
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:9999").await?;
+    let listener = tokio::net::TcpListener::bind(listen).await?;
 
-    info!("streamable HTTP server listening");
+    info!("streamable HTTP server listening on http://{listen}/mcp");
     axum::serve(listener, router).await?;
     Ok(())
 }
