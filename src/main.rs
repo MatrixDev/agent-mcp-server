@@ -39,7 +39,6 @@ use crate::tools::lights::lights_info::LightsInfoTool;
 use crate::tools::lights::lights_set_color::LightsSetColorTool;
 use crate::tools::other::bpi_r4_scp::BpiR4ScpTool;
 use crate::tools::other::bpi_r4_ssh::BpiR4SshTool;
-use crate::tools::other::ieee1905_bench::Ieee1905BenchTool;
 
 ////////////////////////////////////////////////////////////////////////////////
 const DEFAULT_ADDRESS: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
@@ -325,18 +324,6 @@ impl McpAgentHandler {
     ////////////////////////////////////////////////////////////////////////////////
     // Other
     ////////////////////////////////////////////////////////////////////////////////
-
-    #[tool(description = "Run ieee1905 release binary for few seconds and return its resource-usage report")]
-    #[instrument(skip_all, "tool/ieee1905_bench")]
-    pub async fn ieee1905_bench(
-        &self,
-        request: RequestContext<RoleServer>,
-        args: Parameters<Ieee1905BenchTool>,
-    ) -> Result<String, ErrorData> {
-        info!("started: {args:#?}");
-        let context = self.try_get_context().await?;
-        args.0.handle(&context, &request).await
-    }
 
     #[tool(description = "Run ssh command on the remote BPI-R4 device")]
     #[instrument(skip_all, "tool/bpi_r4_ssh")]

@@ -117,7 +117,6 @@ impl<'a> SteamCommand<'a> {
         })?;
 
         Ok(SteamCommandResult {
-            command: self.command,
             stdout: stdout_buf,
             stderr: stderr_buf,
             status,
@@ -127,22 +126,9 @@ impl<'a> SteamCommand<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////
 pub struct SteamCommandResult {
-    command: Command,
     pub stdout: String,
     pub stderr: String,
     pub status: ExitStatus,
-}
-
-impl SteamCommandResult {
-    pub fn into_status_error(self) -> Result<Self, ErrorData> {
-        if self.status.success() {
-            return Ok(self);
-        }
-
-        let program = self.command.as_std().get_program();
-        error!("{program:?} command failed: {}", self.status);
-        Err(ErrorData::internal_error(self.to_string(), None))
-    }
 }
 
 impl Display for SteamCommandResult {
