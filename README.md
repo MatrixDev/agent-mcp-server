@@ -59,6 +59,12 @@ and their output is **streamed** back via MCP progress notifications as it is pr
 | `cargo`  | `cargo …`               | `["build", "--release"]`, `["test", "--", "--nocapture"]` |
 | `gradle` | `./gradlew …` (wrapper) | `["build"]`, `["test", "--info"]`                        |
 
+### Git
+
+| Tool       | Description                                                                            |
+| ---------- | -------------------------------------------------------------------------------------- |
+| `git_diff` | Runs `git diff HEAD~<commit_depth> [-- <paths>]` in `folder`. `commit_depth` defaults to `0`, i.e. uncommitted changes to tracked files; higher values also fold in the last N commits. `paths` are git pathspecs relative to `folder`, eg `["src"]` or `[":(exclude)Cargo.lock"]` |
+
 ### Benchmarks
 
 | Tool             | Description                                                                        |

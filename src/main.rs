@@ -14,29 +14,30 @@ use rmcp::transport::streamable_http_server::StreamableHttpService;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt, tool, tool_handler, tool_router};
 use tokio::sync::Mutex;
-use tools::exec::cargo::CargoRunTool;
-use tools::exec::gradle::GradleRunTool;
-use tools::fs::directory_list::DirectoryListTool;
-use tools::fs::directory_make::DirectoryMakeTool;
-use tools::fs::file_edit::FileEditTool;
-use tools::fs::file_move::FileMoveTool;
-use tools::fs::file_read::FileReadTool;
-use tools::fs::file_read_raw::FileReadRawTool;
-use tools::fs::file_write::FileWriteTool;
-use tools::fs::glob::GlobTool;
-use tools::fs::grep::GrepTool;
-use tools::lights::lights_info::LightsInfoTool;
-use tools::lights::lights_set_color::LightsSetColorTool;
-use tools::other::bpi_r4_ssh::BpiR4SshTool;
-use tools::other::ieee1905_bench::Ieee1905BenchTool;
 use tracing::{error, info, instrument};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::context::McpAgentContext;
+use crate::tools::exec::cargo::CargoRunTool;
+use crate::tools::exec::git_diff::GitDiffTool;
+use crate::tools::exec::gradle::GradleRunTool;
+use crate::tools::fs::directory_list::DirectoryListTool;
+use crate::tools::fs::directory_make::DirectoryMakeTool;
+use crate::tools::fs::file_edit::FileEditTool;
+use crate::tools::fs::file_move::FileMoveTool;
+use crate::tools::fs::file_read::FileReadTool;
+use crate::tools::fs::file_read_raw::FileReadRawTool;
+use crate::tools::fs::file_write::FileWriteTool;
+use crate::tools::fs::glob::GlobTool;
+use crate::tools::fs::grep::GrepTool;
 use crate::tools::lights::controller::LightsController;
+use crate::tools::lights::lights_info::LightsInfoTool;
+use crate::tools::lights::lights_set_color::LightsSetColorTool;
 use crate::tools::other::bpi_r4_scp::BpiR4ScpTool;
+use crate::tools::other::bpi_r4_ssh::BpiR4SshTool;
+use crate::tools::other::ieee1905_bench::Ieee1905BenchTool;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[tokio::main]
@@ -245,6 +246,22 @@ impl McpAgentHandler {
         &self,
         request: RequestContext<RoleServer>,
         args: Parameters<GradleRunTool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, &request).await
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Git
+    ////////////////////////////////////////////////////////////////////////////////
+
+    #[tool(description = "Runs `git diff` directly without a terminal shell")]
+    #[instrument(skip_all, "tool/git_diff")]
+    async fn git_diff(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<GitDiffTool>,
     ) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
