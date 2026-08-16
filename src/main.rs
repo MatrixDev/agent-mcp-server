@@ -205,7 +205,10 @@ impl McpAgentHandler {
         args.0.handle(&context).await
     }
 
-    #[tool(description = "Replace a range of lines in a file with new text")]
+    #[tool(
+        description = "Replace the line range [start_line, end_line) with new text, \
+                       both 1-based, end_line exclusive and optional (omit it to insert)"
+    )]
     #[instrument(skip_all, "tool/edit_file")]
     pub async fn edit_file(&self, args: Parameters<FileEditTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
