@@ -24,6 +24,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use crate::context::McpAgentContext;
 use crate::tools::exec::cargo::CargoRunTool;
 use crate::tools::exec::git::GitRunTool;
+use crate::tools::exec::github::GithubCliTool;
 use crate::tools::exec::gradle::GradleRunTool;
 use crate::tools::fs::directory_list::DirectoryListTool;
 use crate::tools::fs::directory_make::DirectoryMakeTool;
@@ -302,6 +303,34 @@ impl McpAgentHandler {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
         args.0.handle(&context, &request, "diff").await
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // GitHub CLI
+    ////////////////////////////////////////////////////////////////////////////////
+
+    #[tool(description = "Runs `gh issue view` directly without a terminal shell")]
+    #[instrument(skip_all, "tool/gh_issue_view")]
+    async fn gh_issue_view(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<GithubCliTool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, &request, &["issue", "view"]).await
+    }
+
+    #[tool(description = "Runs `gh pr view` directly without a terminal shell")]
+    #[instrument(skip_all, "tool/gh_pr_view")]
+    async fn gh_pr_view(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<GithubCliTool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, &request, &["pr", "view"]).await
     }
 
     ////////////////////////////////////////////////////////////////////////////////

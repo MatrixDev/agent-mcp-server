@@ -11,7 +11,7 @@ use tokio::process::Command;
 use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////
-pub struct SteamCommand<'a> {
+pub struct StreamCommand<'a> {
     request: &'a RequestContext<RoleServer>,
     command: Command,
 }
@@ -22,7 +22,7 @@ enum StreamKind {
     Stderr,
 }
 
-impl<'a> SteamCommand<'a> {
+impl<'a> StreamCommand<'a> {
     ////////////////////////////////////////////////////////////////////////////////
     pub fn new(request: &'a RequestContext<RoleServer>, program: impl AsRef<OsStr>) -> Self {
         let mut command = Command::new(program);

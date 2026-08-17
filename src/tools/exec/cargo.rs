@@ -6,7 +6,7 @@ use rmcp::{ErrorData, RoleServer};
 use serde::Deserialize;
 
 use crate::context::McpAgentContext;
-use crate::helpers::steam_command::SteamCommand;
+use crate::helpers::steam_command::StreamCommand;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct CargoRunTool {
@@ -24,7 +24,7 @@ impl CargoRunTool {
     ) -> Result<String, ErrorData> {
         let project_dir = context.resolve_path(&self.project_dir).await?;
 
-        SteamCommand::new(request, "cargo")
+        StreamCommand::new(request, "cargo")
             .args(self.arguments)
             .current_dir(project_dir)
             .execute()

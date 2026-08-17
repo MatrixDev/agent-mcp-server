@@ -6,7 +6,7 @@ use rmcp::{ErrorData, RoleServer};
 use serde::Deserialize;
 
 use crate::context::McpAgentContext;
-use crate::helpers::steam_command::SteamCommand;
+use crate::helpers::steam_command::StreamCommand;
 use crate::permissions::PermissionsGroup;
 use crate::tools::other::BPI_R4_DESTINATION;
 
@@ -31,7 +31,7 @@ impl BpiR4ScpTool {
 
         context.check_permissions(PermissionsGroup::FsRead, &source).await?;
 
-        SteamCommand::new(request, "scp")
+        StreamCommand::new(request, "scp")
             .args([OsStr::new("-O"), source.as_ref(), target.as_ref()])
             .current_dir(current_dir)
             .execute()

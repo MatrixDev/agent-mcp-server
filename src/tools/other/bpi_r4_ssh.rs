@@ -4,7 +4,7 @@ use rmcp::{ErrorData, RoleServer};
 use serde::Deserialize;
 
 use crate::context::McpAgentContext;
-use crate::helpers::steam_command::SteamCommand;
+use crate::helpers::steam_command::StreamCommand;
 use crate::tools::other::BPI_R4_DESTINATION;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -22,7 +22,7 @@ impl BpiR4SshTool {
     ) -> Result<String, ErrorData> {
         let current_dir = context.resolve_path(".").await?;
 
-        SteamCommand::new(request, "ssh")
+        StreamCommand::new(request, "ssh")
             .args([BPI_R4_DESTINATION, self.command.as_str()])
             .current_dir(current_dir)
             .execute()
