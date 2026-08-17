@@ -1,7 +1,7 @@
 # mcp-server
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server (`mdev`) that exposes
-file-system, build, benchmark, and smart-light tools to an agent. It runs build commands
+file-system, build, git/GitHub, and smart-light tools to an agent. It runs commands
 directly (without spawning a terminal shell) and returns their combined stdout/stderr.
 
 Two transports are built in:
@@ -68,11 +68,19 @@ and their output is **streamed** back via MCP progress notifications as it is pr
 `folder` is any directory inside the git repository — it selects the repository when several are
 present. `arguments` are appended verbatim after the subcommand; only `diff` is exposed for now.
 
-### Benchmarks
+### GitHub
 
-| Tool             | Description                                                                        |
-| ---------------- | ---------------------------------------------------------------------------------- |
-| `ieee1905_bench` | Runs the `ieee1905` release binary under a timeout and returns its resource-usage report |
+Wraps the [`gh`](https://cli.github.com) CLI; it must be installed and authenticated
+(`gh auth status`).
+
+| Tool             | Runs               | Example `arguments`                                     |
+| ---------------- | ------------------ | ------------------------------------------------------- |
+| `gh_issue_view`  | `gh issue view …`  | `["123"]`, `["123", "--comments"]`, `["1", "--repo", "cli/cli"]` |
+| `gh_pr_view`     | `gh pr view …`     | `["456"]`, `["--json", "title,state,body"]`, `["9000", "--repo", "cli/cli"]` |
+
+`folder` is any directory inside the git repository — it selects the repository when several
+are present, and `gh` infers the remote from it unless `--repo owner/name` is passed.
+`arguments` are appended verbatim after the subcommand.
 
 ### Smart lights
 
@@ -103,22 +111,21 @@ claude mcp add mdev /absolute/path/to/mcp-server/target/release/mcp-server stdio
 
 List or remove it with `claude mcp list` / `claude mcp remove mdev`.
 
-**Permissions.** MCP tools are addressed as `mcp__mdev__<tool>` (or `mcp__mdev` for the whole
-server). Allow or deny them via the `permissions` block in `.claude/settings.json` (or run
-`/permissions` in the CLI):
+**Permissions.** MCP tools are addressed as `mcp__mdev__<tool>`, or just `mcp__mdev` for the
+whole server. Allow the server in one line via the `permissions` block in
+`.claude/settings.json` (or run `/permissions` in the CLI):
 
 ```json
 {
   "permissions": {
-    "allow": ["mcp__mdev__read_file", "mcp__mdev__grep", "mcp__mdev__cargo_build"],
-    "deny": ["mcp__mdev__write_file"]
+    "allow": ["mcp__mdev"]
   }
 }
 ```
 
-Anything not matched falls back to the interactive prompt. Use `mcp__mdev` to cover every
-tool on the server at once. (MCP tool patterns don't support trailing wildcards — list the
-tools, or the server name for all of them.)
+Anything not matched falls back to the interactive prompt. (MCP tool patterns don't support
+trailing wildcards — use the bare server name to cover every tool, or list tools individually
+when you want finer control.)
 
 ### Zed
 
@@ -141,36 +148,29 @@ edit `~/.config/zed/settings.json`). Zed spawns the binary, so use the stdio tra
 Use an **absolute path** for `command`; Zed does not resolve relative paths or `~`.
 
 **Permissions.** Two layers: a profile decides which tools are *visible*, and
-`agent.tool_permissions` decides whether they may *run*. MCP tools are addressed as
-`mcp:mdev:<tool>`:
+`agent.tool_permissions` decides whether they may *run*. Turning on
+`enable_all_context_servers` exposes every `mdev` tool at once, and a global `"allow"`
+default lets them run without confirmation:
 
 ```json
 {
   "agent": {
     "profiles": {
       "default": {
-        "enable_all_context_servers": false,
-        "context_servers": {
-          "mdev": {
-            "tools": { "read_file": true, "grep": true, "cargo_build": true }
-          }
-        }
+        "enable_all_context_servers": true
       }
     },
     "tool_permissions": {
-      "default": "confirm",
-      "tools": {
-        "mcp:mdev:read_file": { "default": "allow" },
-        "mcp:mdev:grep": { "default": "allow" },
-        "mcp:mdev:cargo_build": { "default": "allow" }
-      }
+      "default": "allow"
     }
   }
 }
 ```
 
-Per-tool `default` accepts `"allow"`, `"confirm"`, or `"deny"`, and overrides the global
-`tool_permissions.default`. (Requires Zed v0.224.0 or later.)
+`tool_permissions.default` accepts `"allow"`, `"confirm"`, or `"deny"` and applies to *all*
+tools, built-in ones included — Zed has no server-wide pattern for MCP tools, so to keep the
+looser default scoped you have to name them individually as `mcp:mdev:<tool>` under
+`tool_permissions.tools`. (Requires Zed v0.224.0 or later.)
 
 ### opencode
 
@@ -205,19 +205,16 @@ It supports both a `remote` (HTTP) and a `local` (stdio) server type:
 
 **Permissions.** opencode exposes MCP tools as `<server>_<tool>` (e.g. `mdev_read_file`) and
 gates them with the top-level `permission` block. Each entry is `"allow"`, `"ask"`, or
-`"deny"`, and keys accept glob patterns:
+`"deny"`, and keys accept glob patterns — so one `mdev_*` entry covers the whole server:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "permission": {
-    "mdev_*": "ask",
-    "mdev_read_file": "allow",
-    "mdev_grep": "allow",
-    "mdev_write_file": "deny"
+    "mdev_*": "allow"
   }
 }
 ```
 
-More specific keys win over wildcard patterns, so the example asks for any `mdev` tool by
-default while allowing the read-only ones and denying writes.
+More specific keys win over wildcard patterns, so you can still carve out individual tools
+(e.g. adding `"mdev_write_file": "ask"`) on top of the blanket entry.
