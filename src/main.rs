@@ -40,6 +40,7 @@ use crate::tools::lights::lights_info::LightsInfoTool;
 use crate::tools::lights::lights_set_color::LightsSetColorTool;
 use crate::tools::other::bpi_r4_scp::BpiR4ScpTool;
 use crate::tools::other::bpi_r4_ssh::BpiR4SshTool;
+use crate::tools::other::docker_ssh::DockerSshTool;
 
 ////////////////////////////////////////////////////////////////////////////////
 const DEFAULT_ADDRESS: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
@@ -206,10 +207,8 @@ impl McpAgentHandler {
         args.0.handle(&context).await
     }
 
-    #[tool(
-        description = "Replace the line range [start_line, end_line) with new text, \
-                       both 1-based, end_line exclusive and optional (omit it to insert)"
-    )]
+    #[tool(description = "Replace the line range [start_line, end_line) with new text, \
+                       both 1-based, end_line exclusive and optional (omit it to insert)")]
     #[instrument(skip_all, "tool/edit_file")]
     pub async fn edit_file(&self, args: Parameters<FileEditTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
@@ -375,6 +374,18 @@ impl McpAgentHandler {
         &self,
         request: RequestContext<RoleServer>,
         args: Parameters<BpiR4ScpTool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, &request).await
+    }
+
+    #[tool(description = "Run ssh command on the locally running docker instance")]
+    #[instrument(skip_all, "tool/docker_ssh")]
+    pub async fn docker_ssh(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<DockerSshTool>,
     ) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
