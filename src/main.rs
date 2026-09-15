@@ -40,7 +40,7 @@ use crate::tools::lights::lights_info::LightsInfoTool;
 use crate::tools::lights::lights_set_color::LightsSetColorTool;
 use crate::tools::other::bpi_r4_scp::BpiR4ScpTool;
 use crate::tools::other::bpi_r4_ssh::BpiR4SshTool;
-use crate::tools::other::docker_ssh::DockerSshTool;
+use crate::tools::other::docker_bash::DockerBashTool;
 
 ////////////////////////////////////////////////////////////////////////////////
 const DEFAULT_ADDRESS: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
@@ -380,12 +380,12 @@ impl McpAgentHandler {
         args.0.handle(&context, &request).await
     }
 
-    #[tool(description = "Run ssh command on the locally running docker instance")]
-    #[instrument(skip_all, "tool/docker_ssh")]
-    pub async fn docker_ssh(
+    #[tool(description = "Run bash command on the locally running docker instance")]
+    #[instrument(skip_all, "tool/docker_bash")]
+    pub async fn docker_bash(
         &self,
         request: RequestContext<RoleServer>,
-        args: Parameters<DockerSshTool>,
+        args: Parameters<DockerBashTool>,
     ) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
