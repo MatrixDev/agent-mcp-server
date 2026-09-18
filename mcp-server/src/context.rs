@@ -102,6 +102,7 @@ impl McpAgentContext {
     }
 
     ////////////////////////////////////////////////////////////////////////////////
+    #[allow(deprecated)]
     async fn fetch_peer_list_roots(context: &RequestContext<RoleServer>) -> anyhow::Result<PathBuf> {
         debug!("fetching list_roots");
 

@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
-use rmcp::schemars::{self, JsonSchema};
 use rmcp::ErrorData;
+use rmcp::schemars::{self, JsonSchema};
 use serde::Deserialize;
 use tracing::error;
 

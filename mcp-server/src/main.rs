@@ -40,7 +40,8 @@ use crate::tools::lights::lights_info::LightsInfoTool;
 use crate::tools::lights::lights_set_color::LightsSetColorTool;
 use crate::tools::other::bpi_r4_scp::BpiR4ScpTool;
 use crate::tools::other::bpi_r4_ssh::BpiR4SshTool;
-use crate::tools::other::docker_bash::DockerBashTool;
+use crate::tools::other::rdk_docker_bash::RdkDockerBashTool;
+use crate::tools::other::rdk_qemu::{RdkQemuExecTool, RdkQemuManager, RdkQemuStartTool, RdkQemuStopTool};
 
 ////////////////////////////////////////////////////////////////////////////////
 const DEFAULT_ADDRESS: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
@@ -94,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
 #[instrument(skip_all, "serve_stdio")]
 async fn serve_stdio() -> anyhow::Result<()> {
     let lights = LightsController::new()?;
-    let service = McpAgentHandler::new(lights)?
+    let service = McpAgentHandler::new(lights, RdkQemuManager::default())?
         .serve((tokio::io::stdin(), tokio::io::stdout()))
         .await?;
     service.waiting().await?;
@@ -105,8 +106,10 @@ async fn serve_stdio() -> anyhow::Result<()> {
 #[instrument(skip_all, "serve_http")]
 async fn serve_http(listen: SocketAddr) -> anyhow::Result<()> {
     let lights = LightsController::new()?;
+    // shared across sessions, the guest ssh port allows a single qemu instance at a time
+    let qemu = RdkQemuManager::default();
     let service = StreamableHttpService::new(
-        move || McpAgentHandler::new(lights.clone()),
+        move || McpAgentHandler::new(lights.clone(), qemu.clone()),
         Arc::new(LocalSessionManager::default()),
         StreamableHttpServerConfig::default(),
     );
@@ -122,15 +125,17 @@ async fn serve_http(listen: SocketAddr) -> anyhow::Result<()> {
 ////////////////////////////////////////////////////////////////////////////////
 struct McpAgentHandler {
     lights: LightsController,
+    qemu: RdkQemuManager,
     context: Mutex<Option<Arc<McpAgentContext>>>,
     init_context: OnceLock<RequestContext<RoleServer>>,
 }
 
 impl McpAgentHandler {
     ////////////////////////////////////////////////////////////////////////////////
-    pub fn new(lights: LightsController) -> std::io::Result<Self> {
+    pub fn new(lights: LightsController, qemu: RdkQemuManager) -> std::io::Result<Self> {
         Ok(Self {
             lights,
+            qemu,
             init_context: Default::default(),
             context: Default::default(),
         })
@@ -380,15 +385,45 @@ impl McpAgentHandler {
         args.0.handle(&context, &request).await
     }
 
-    #[tool(description = "Run bash command on the locally running docker instance")]
-    #[instrument(skip_all, "tool/docker_bash")]
-    pub async fn docker_bash(
+    #[tool(description = "Run bash command on the locally running RDK docker instance")]
+    #[instrument(skip_all, "tool/rdk_docker_bash")]
+    pub async fn rdk_docker_bash(
         &self,
         request: RequestContext<RoleServer>,
-        args: Parameters<DockerBashTool>,
+        args: Parameters<RdkDockerBashTool>,
     ) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
         args.0.handle(&context, &request).await
+    }
+
+    #[tool(description = "Start the RDK qemu instance and wait until its guest command agent answers")]
+    #[instrument(skip_all, "tool/rdk_qemu_start")]
+    pub async fn rdk_qemu_start(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<RdkQemuStartTool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, &request, &self.qemu).await
+    }
+
+    #[tool(description = "Run shell command on the running RDK qemu instance over its virtio-serial channel")]
+    #[instrument(skip_all, "tool/rdk_qemu_exec")]
+    pub async fn rdk_qemu_exec(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<RdkQemuExecTool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(&request, &self.qemu).await
+    }
+
+    #[tool(description = "Stop the running RDK qemu instance")]
+    #[instrument(skip_all, "tool/rdk_qemu_stop")]
+    pub async fn rdk_qemu_stop(&self, args: Parameters<RdkQemuStopTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        args.0.handle(&self.qemu).await
     }
 }

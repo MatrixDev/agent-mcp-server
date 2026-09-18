@@ -2,3 +2,5 @@
 /.claude
 /.idea
 *.iml
+/qemu-rdk*
+/mcp-resources

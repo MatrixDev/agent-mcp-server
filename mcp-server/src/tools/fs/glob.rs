@@ -2,8 +2,8 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
 use glob::MatchOptions;
-use rmcp::schemars::{self, JsonSchema};
 use rmcp::ErrorData;
+use rmcp::schemars::{self, JsonSchema};
 use serde::Deserialize;
 use tracing::error;
 

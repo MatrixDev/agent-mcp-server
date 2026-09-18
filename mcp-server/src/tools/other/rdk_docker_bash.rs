@@ -8,12 +8,12 @@ use crate::helpers::steam_command::StreamCommand;
 
 ////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct DockerBashTool {
+pub struct RdkDockerBashTool {
     /// bash command to run inside the RDK docker container
     command: String,
 }
 
-impl DockerBashTool {
+impl RdkDockerBashTool {
     pub async fn handle(
         self,
         context: &McpAgentContext,

@@ -1,5 +1,5 @@
-use rmcp::schemars::{self, JsonSchema};
 use rmcp::ErrorData;
+use rmcp::schemars::{self, JsonSchema};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
