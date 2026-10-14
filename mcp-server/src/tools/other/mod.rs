@@ -1,5 +1,6 @@
 pub mod bpi_r4_scp;
 pub mod bpi_r4_ssh;
+pub mod lima_bash;
 pub mod rdk_docker_bash;
 pub mod rdk_qemu;
 

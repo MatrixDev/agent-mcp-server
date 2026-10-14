@@ -40,6 +40,7 @@ use crate::tools::lights::lights_info::LightsInfoTool;
 use crate::tools::lights::lights_set_color::LightsSetColorTool;
 use crate::tools::other::bpi_r4_scp::BpiR4ScpTool;
 use crate::tools::other::bpi_r4_ssh::BpiR4SshTool;
+use crate::tools::other::lima_bash::LimaBashTool;
 use crate::tools::other::rdk_docker_bash::RdkDockerBashTool;
 use crate::tools::other::rdk_qemu::{RdkQemuExecTool, RdkQemuManager, RdkQemuStartTool, RdkQemuStopTool};
 
@@ -391,6 +392,18 @@ impl McpAgentHandler {
         &self,
         request: RequestContext<RoleServer>,
         args: Parameters<RdkDockerBashTool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, &request).await
+    }
+
+    #[tool(description = "Run bash command on the locally running lima instance")]
+    #[instrument(skip_all, "tool/lima_bash")]
+    pub async fn lima_bash(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<LimaBashTool>,
     ) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
