@@ -36,6 +36,21 @@ use crate::tools::fs::file_read_raw::FileReadRawTool;
 use crate::tools::fs::file_write::FileWriteTool;
 use crate::tools::fs::glob::GlobTool;
 use crate::tools::fs::grep::GrepTool;
+use crate::tools::keynote::keynote_add_code::KeynoteAddCodeTool;
+use crate::tools::keynote::keynote_add_image::KeynoteAddImageTool;
+use crate::tools::keynote::keynote_add_line::KeynoteAddLineTool;
+use crate::tools::keynote::keynote_add_shape::KeynoteAddShapeTool;
+use crate::tools::keynote::keynote_add_slides::KeynoteAddSlidesTool;
+use crate::tools::keynote::keynote_add_text_box::KeynoteAddTextBoxTool;
+use crate::tools::keynote::keynote_batch::KeynoteBatchTool;
+use crate::tools::keynote::keynote_create::KeynoteCreateTool;
+use crate::tools::keynote::keynote_delete_objects::KeynoteDeleteObjectsTool;
+use crate::tools::keynote::keynote_delete_slides::KeynoteDeleteSlidesTool;
+use crate::tools::keynote::keynote_edit_object::KeynoteEditObjectTool;
+use crate::tools::keynote::keynote_edit_slide::KeynoteEditSlideTool;
+use crate::tools::keynote::keynote_export::KeynoteExportTool;
+use crate::tools::keynote::keynote_info::KeynoteInfoTool;
+use crate::tools::keynote::keynote_move_slide::KeynoteMoveSlideTool;
 use crate::tools::lights::controller::LightsController;
 use crate::tools::lights::lights_info::LightsInfoTool;
 use crate::tools::lights::lights_set_color::LightsSetColorTool;
@@ -370,6 +385,178 @@ impl McpAgentHandler {
     #[tool(description = "Sets smart light with provided id to requested color")]
     #[instrument(skip_all, "tool/lights_set_color")]
     async fn lights_set_color(&self, args: Parameters<LightsSetColorTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Keynote
+    ////////////////////////////////////////////////////////////////////////////////
+
+    #[tool(
+        description = "Create a new Keynote presentation (*.key) using a template's theme, with its slides \
+                       made from the theme layouts, including transitions and builds (animations)"
+    )]
+    #[instrument(skip_all, "tool/keynote_create")]
+    async fn keynote_create(&self, args: Parameters<KeynoteCreateTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Describe a Keynote presentation: slide size, theme layouts with their placeholders, and \
+                       every slide with its layout, background, title, body, notes, skipped flag, transition, \
+                       builds (animations) and objects (id, kind, frame, text, fill, stroke, image). `slides` \
+                       limits it to a range, `summary` gives one line per slide"
+    )]
+    #[instrument(skip_all, "tool/keynote_info")]
+    async fn keynote_info(&self, args: Parameters<KeynoteInfoTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Add slides to a Keynote presentation, each made from a theme layout or duplicated \
+                       from a given slide, with styled title and body, background, placeholder visibility, \
+                       transitions and builds (animations). Every slide is checked before anything changes"
+    )]
+    #[instrument(skip_all, "tool/keynote_add_slides")]
+    async fn keynote_add_slides(&self, args: Parameters<KeynoteAddSlidesTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Edit a slide of a Keynote presentation: title and body (plain or styled), presenter notes, \
+                       skipped flag, background (colour, gradient, image or the layout's), shown placeholders, \
+                       transition to the next slide and builds (animations) of its objects"
+    )]
+    #[instrument(skip_all, "tool/keynote_edit_slide")]
+    async fn keynote_edit_slide(&self, args: Parameters<KeynoteEditSlideTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(description = "Move a slide of a Keynote presentation to another position")]
+    #[instrument(skip_all, "tool/keynote_move_slide")]
+    async fn keynote_move_slide(&self, args: Parameters<KeynoteMoveSlideTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(description = "Delete slides from a Keynote presentation")]
+    #[instrument(skip_all, "tool/keynote_delete_slides")]
+    async fn keynote_delete_slides(&self, args: Parameters<KeynoteDeleteSlidesTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Place an image (png, jpg, gif, heic, tiff, pdf, svg) on a Keynote slide: frame, fit \
+                       (contain, cover, stretch, original), opacity, rounded corners, rotation, border, shadow, \
+                       alt text, or into the layout's media placeholder. Returns its object id"
+    )]
+    #[instrument(skip_all, "tool/keynote_add_image")]
+    async fn keynote_add_image(&self, args: Parameters<KeynoteAddImageTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Add a shape to a Keynote slide: rect, rounded_rect, ellipse, triangle, diamond, polygon, \
+                       star, arrow, chevron, callout or an SVG path, with fill (colour or gradient), line, \
+                       shadow, opacity and optional styled text inside. Returns its object id"
+    )]
+    #[instrument(skip_all, "tool/keynote_add_shape")]
+    async fn keynote_add_shape(&self, args: Parameters<KeynoteAddShapeTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Add a free text box to a Keynote slide with styled text (runs with font, size, colour, bold, \
+                       links…, or Markdown-lite), paragraph alignment, bullets and spacing, padding, vertical \
+                       alignment, columns, shrink-to-fit and an optional fill or line. Returns its object id"
+    )]
+    #[instrument(skip_all, "tool/keynote_add_text_box")]
+    async fn keynote_add_text_box(&self, args: Parameters<KeynoteAddTextBoxTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Draw a straight line on a Keynote slide from one point to another, with colour, width, dash \
+                       and arrow heads. Returns its object id"
+    )]
+    #[instrument(skip_all, "tool/keynote_add_line")]
+    async fn keynote_add_line(&self, args: Parameters<KeynoteAddLineTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Add a syntax-highlighted code block to a Keynote slide, from `code` or a source `file`: \
+                       language, colour theme, font, size, line height, highlighted (others dimmed) lines and line \
+                       numbers. A \"By Bullet\" build on it reveals the code line by line. Returns its object id"
+    )]
+    #[instrument(skip_all, "tool/keynote_add_code")]
+    async fn keynote_add_code(&self, args: Parameters<KeynoteAddCodeTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Change any object of a Keynote presentation by its id: frame, rotation, z order, fill, line, \
+                       shadow, opacity, text, text layout, lock, alt text or link"
+    )]
+    #[instrument(skip_all, "tool/keynote_edit_object")]
+    async fn keynote_edit_object(&self, args: Parameters<KeynoteEditObjectTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(description = "Delete objects of a Keynote presentation by id, with their builds")]
+    #[instrument(skip_all, "tool/keynote_delete_objects")]
+    async fn keynote_delete_objects(&self, args: Parameters<KeynoteDeleteObjectsTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Render Keynote slides to PNG or SVG previews (drawn without Keynote, close but not \
+                       identical) to check layout, overflowing text and colours; also reports text that doesn't \
+                       fit its frame"
+    )]
+    #[instrument(skip_all, "tool/keynote_export")]
+    async fn keynote_export(&self, args: Parameters<KeynoteExportTool>) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context).await
+    }
+
+    #[tool(
+        description = "Apply many Keynote operations (add_slides, edit_slide, move_slide, delete_slides, add_image, \
+                       add_shape, add_text_box, add_line, add_code, edit_object, delete_objects) in one call and \
+                       one save; nothing is saved when one fails. Add operations take a `ref` name later \
+                       operations use as \"$name\" for ids, build targets and z orders. `dry_run` checks without \
+                       saving"
+    )]
+    #[instrument(skip_all, "tool/keynote_batch")]
+    async fn keynote_batch(&self, args: Parameters<KeynoteBatchTool>) -> Result<String, ErrorData> {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
         args.0.handle(&context).await

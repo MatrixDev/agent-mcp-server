@@ -91,6 +91,118 @@ Controls WLED devices discovered on the local network.
 | `lights_info`      | Returns the available smart lights (id, name, hostname, address)             |
 | `lights_set_color` | Sets a light (by `id`) to an RGB color, each component in the `0.0`–`1.0` range. Run `lights_info` first to populate the device cache |
 
+### Keynote
+
+Reads and edits Apple Keynote presentations (`*.key`, Keynote 6 and later) in pure Rust. It
+works on any OS and doesn't need Keynote. A `.key` file is a zip of Snappy-compressed protobuf
+archives (`Index/*.iwa`). Apple doesn't document the format, so the field numbers come from the
+schemas [keynote-parser](https://github.com/psobot/keynote-parser) extracted from Keynote 14.5.
+Fields the tools don't know about are carried over unchanged. Only single-file presentations are
+supported, not package folders.
+
+New slides are made from one of the theme's **layouts**, the same way Keynote does it (copies of
+the layout's placeholders, with the sample text cleared), or **duplicated** from an existing slide
+along with all its content and animations. New presentations take their theme from a
+**template**: any `.key` file, `mcp-resources/keynote/template.key` by default. The template's
+own slides are dropped.
+
+| Tool                     | Description                                                                 |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `keynote_create`         | Create a presentation from `template`'s theme with the given `slides`       |
+| `keynote_info`           | Slide size, the theme's layouts with their placeholders, and every slide's layout, background, title, body, notes, skipped flag, transition, builds, build order and objects (id, kind, frame, text, fill, stroke, image). `slides: [from, to]` limits it, `summary: true` gives one line per slide |
+| `keynote_add_slides`     | Add `slides` at the end, or at a 1-based `position`; every slide is checked before anything changes, only the new slides are returned |
+| `keynote_edit_slide`     | Set a slide's `title`, `body`, `notes`, `skipped`, `background`, `show_title` / `show_body` / `show_slide_number`, `transition` and `builds` |
+| `keynote_move_slide`     | Move a slide to another 1-based `position`                                   |
+| `keynote_delete_slides`  | Delete slides by their 1-based numbers                                       |
+| `keynote_add_image`      | Place an image (png, jpg, gif, heic, tiff, pdf, svg): `frame`, `fit` (contain, cover, stretch, original), `opacity`, `corner_radius`, `rotation`, `stroke`, `shadow`, `description`, or `placeholder: true` to fill the layout's photo |
+| `keynote_add_shape`      | Add a shape (rect, rounded_rect, ellipse, triangle, diamond, polygon, star, arrow, chevron, plus, callout, SVG `path`) with `fill`, `stroke`, `shadow`, `opacity` and optional `text` |
+| `keynote_add_text_box`   | Add a free text box with styled `text`, `text_inset`, `vertical_align`, `columns`, `autosize: "shrink"` and optional fill or line |
+| `keynote_add_line`       | Draw a line `from` → `to` with `color`, `width`, `dash` and `head` / `tail` ends |
+| `keynote_add_code`       | Add a syntax-highlighted code block from `code` or a source `file`: `language`, `theme`, `font`, `size`, `line_height`, `highlight_lines`, `line_numbers` |
+| `keynote_edit_object`    | Change an object by `id`: `frame` (any of x/y/w/h), `rotation`, `z`, fill/stroke/shadow/opacity, `text`, text layout, `locked`, `description`, `link` |
+| `keynote_delete_objects` | Delete objects by `ids`, with their builds                                   |
+| `keynote_export`         | Render slides to PNG or SVG previews in `out_dir` and report text that doesn't fit its frame |
+| `keynote_batch`          | Apply many operations (`op`: add_slides, edit_slide, move_slide, delete_slides, add_image, add_shape, add_text_box, add_line, add_code, edit_object, delete_objects) in one save; `ref` names created objects for later `"$name"` use; `dry_run` saves nothing |
+
+Geometry is in slide points with the origin top-left, colours are `#RRGGBB` or `#RRGGBBAA`,
+rotation is in degrees clockwise. Every object has a stable id (`"id:N"`) that object tools,
+build targets and z orders (`"above:id:N"`, `"below:id:N"`, `"front"`, `"back"`) take. Add and
+edit tools return the object's id and its slide, with warnings about overflowing text.
+
+**Text.** `title`, `body` and object `text` take a plain string (one paragraph per line, each
+keeping the style of the paragraph at the same position), or styled paragraphs: a paragraph
+object or a list of them. A paragraph has `text`, `markdown` or `runs`, character formatting
+(`font`, `size`, `bold`, `italic`, `underline`, `strike`, `color`, `highlight`, `baseline`,
+`link`, `monospace`) applying to all its runs, and paragraph formatting (`align`, `bullet`,
+`indent_level`, `line_spacing`, `line_height`, `space_before`, `space_after`). Markdown-lite
+understands `**bold**`, `*italic*`, `~~strike~~`, `` `code` ``, `[text](url)`, and list items
+starting with `- ` or `1. `, nested by two spaces. Styling is stored the way Keynote stores it:
+variations of the theme's styles, shared between objects that look the same.
+
+```json
+{ "path": "deck.key", "slide": 2, "frame": { "x": 96, "y": 290, "w": 400, "h": 200 },
+  "text": [
+    { "runs": [ { "text": "76% → 24%", "size": 84, "bold": true, "color": "#6CC38B" } ] },
+    { "markdown": "Android bugs that are *memory-safety* bugs", "size": 26, "color": "#A8A39A" }
+  ],
+  "fill": "#23222A", "stroke": { "color": "#2E2D35", "width": 2 }, "text_inset": 24 }
+```
+
+Changing text drops inline objects such as fields in that text box (links written by the tools
+are kept). Keynote redraws slide thumbnails the next time it opens the file. Don't edit a file
+while Keynote has it open, because Keynote's next save overwrites the changes.
+
+**Animations.**
+
+- **Transitions** play between slides. `transition` sets the one leaving a slide:
+  `{ "effect", "duration", "delay", "automatic" }`. Effect `"none"` removes it.
+- **Builds** animate objects within a slide. `builds` replaces all of a slide's builds; they play
+  in list order, and an empty list removes them. Each build is
+  `{ "target", "kind", "effect", "delivery", "duration", "delay", "automatic" }`:
+  - `target` is `"title"`, `"body"`, `"id:N"` or `"object N"`, a 1-based index into the slide's
+    `objects` in `keynote_info`. Only objects shown on the slide qualify.
+  - `kind` is `"In"` (the default) or `"Out"`.
+  - `delivery` `"By Bullet"` or `"By Highlighted Bullet"` takes one step per paragraph (a code
+    block then reveals line by line).
+  - `automatic` starts the first step right after the previous one instead of on click.
+
+Effects are Keynote's internal identifiers. These are verified in real presentations:
+`apple:dissolve`, `apple:fade-and-move` and `apple:magic-move-implied-motion-path` for
+transitions, and `apple:dissolve`, `apple:dissolve character` and
+`com.apple.iWork.Keynote.FromDarkness` for builds. Run `keynote_info` on an existing deck to find
+others.
+
+```json
+{
+  "path": "deck.key",
+  "operations": [
+    { "op": "add_slides", "slides": [ { "layout": "Title & Bullets", "title": "The 70% problem",
+      "show_body": false, "background": "#17161B" } ] },
+    { "op": "add_shape", "ref": "tile", "slide": 2, "shape": "rounded_rect",
+      "frame": { "x": 96, "y": 290, "w": 400, "h": 200 }, "fill": "#23222A",
+      "text": { "markdown": "**70%** of bugs", "size": 40, "color": "#F4EFE6" } },
+    { "op": "edit_slide", "slide": 2,
+      "builds": [ { "target": "$tile", "effect": "apple:dissolve" } ] }
+  ]
+}
+```
+
+**Previews.** `keynote_export` draws slides without Keynote: backgrounds, shapes, lines, images
+(PNG, JPEG, GIF, WebP), masks, fills, strokes, shadows and styled text with wrapping, alignment,
+spacing and bullets, measured with this machine's fonts. It is close to Keynote, not identical;
+tables, charts, movies and effects show as labelled boxes. Text taller than its frame is reported
+as a warning.
+
+Not supported yet: tables, charts, groups and alignment of objects, connectors, slide links,
+custom bullet characters, changing a slide's layout, editing layouts and the theme, and
+PDF/PPTX export. Object archives without an example saved by Keynote (lines, masks, line ends,
+gradients, image backgrounds) follow keynote-parser's schemas and are unverified in Keynote.
+
+Tests run against two presentations saved by Keynote at the repository root: `Rust.key` and
+`template.key` (`cargo test -p mcp-server keynote`). `explore.rs` holds an ignored test that dumps
+archives of a deck to `target/explore.txt` for reverse engineering (settings in
+`target/explore.cfg`).
+
 ## Harness config
 
 Use the **HTTP** transport (`http://localhost:9999/mcp`) when the server is already running,

@@ -26,3 +26,10 @@ clap = { version = "4", features = ["derive"] }
 scopeguard = "1.2.0"
 parking_lot = "0.12.5"
 libc = "0.2"
+snap = "1"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+resvg = "0.45"
+sha1_smol = "1"
+imagesize = "0.13"
+kurbo = "0.11"
+ttf-parser = "0.25"
