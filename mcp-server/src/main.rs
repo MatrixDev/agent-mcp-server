@@ -23,6 +23,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::context::McpAgentContext;
 use crate::tools::exec::cargo::CargoRunTool;
+use crate::tools::exec::flutter::FlutterRunTool;
 use crate::tools::exec::git::GitRunTool;
 use crate::tools::exec::github::GithubCliTool;
 use crate::tools::exec::gradle::GradleRunTool;
@@ -292,6 +293,22 @@ impl McpAgentHandler {
         info!("started: {args:#?}");
         let context = self.try_get_context().await?;
         args.0.handle(&context, &request).await
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Flutter
+    ////////////////////////////////////////////////////////////////////////////////
+
+    #[tool(description = "Runs `flutter build` task directly without a terminal shell")]
+    #[instrument(skip_all, "tool/flutter_build")]
+    async fn flutter_build(
+        &self,
+        request: RequestContext<RoleServer>,
+        args: Parameters<FlutterRunTool>,
+    ) -> Result<String, ErrorData> {
+        info!("started: {args:#?}");
+        let context = self.try_get_context().await?;
+        args.0.handle(&context, &request, "build").await
     }
 
     ////////////////////////////////////////////////////////////////////////////////
